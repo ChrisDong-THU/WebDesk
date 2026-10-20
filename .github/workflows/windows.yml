@@ -1,5 +1,15 @@
 name: Windows build
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'desktop/**'
+      - 'native/**'
+      - 'build/**'
+      - 'scripts/build-flutter.ps1'
+      - 'scripts/prepare-flutter.ps1'
+      - 'scripts/setup-inno.ps1'
+      - '.github/workflows/windows.yml'
   workflow_dispatch:
 permissions:
   contents: read

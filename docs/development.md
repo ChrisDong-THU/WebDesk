@@ -46,7 +46,7 @@ npm run build:inno
 
 只预览安装界面：`npm run preview:installer`。预览程序不安装应用或服务；`scripts/preview-installer.ps1 -ValidateOnly` 仅检查脚本。
 
-GitHub 的 **Windows build** workflow 可手动构建，并上传安装包 Artifact；不会自动发布 Release 或部署服务器。
+GitHub 的 **Windows build** workflow 在 main 分支的客户端或构建脚本变更时运行，也可手动触发，并上传安装包 Artifact；不会自动发布 Release 或部署服务器。
 
 ## 版本与源码边界
 
