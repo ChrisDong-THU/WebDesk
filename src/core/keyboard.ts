@@ -11,7 +11,7 @@ export const physicalKeys: Readonly<Record<string, Key>> = Object.freeze({
   Backquote: Key.Grave, Minus: Key.Minus, Equal: Key.Equal,
   BracketLeft: Key.LeftBracket, BracketRight: Key.RightBracket, Backslash: Key.Backslash,
   Semicolon: Key.Semicolon, Quote: Key.Quote, Comma: Key.Comma, Period: Key.Period, Slash: Key.Slash,
-  Enter: Key.Return, Space: Key.Space, Tab: Key.Tab, Backspace: Key.Backspace,
+  Escape: Key.Escape, Enter: Key.Return, Space: Key.Space, Tab: Key.Tab, Backspace: Key.Backspace,
   ShiftLeft: Key.LeftShift, ShiftRight: Key.RightShift,
   ControlLeft: Key.LeftControl, ControlRight: Key.RightControl,
   AltLeft: Key.LeftAlt, AltRight: Key.RightAlt, MetaLeft: Key.LeftWin, MetaRight: Key.RightWin,
@@ -37,10 +37,7 @@ export function createKeyboardInput(send: (data: KeyBehavior) => void) {
     if (up) pressed.delete(key); else pressed.add(key);
     send({ type: up ? 16 : 15, key: [key] });
   }
-  function handle(event: KeyEvent, up: boolean) {
-    const key = Object.hasOwn(physicalKeys, event.code) ? physicalKeys[event.code] : undefined;
-    if (key === undefined) return;
-    event.preventDefault();
+  function syncModifiers(event: Pick<KeyEvent, 'shiftKey' | 'ctrlKey' | 'altKey' | 'metaKey'>, key?: Key) {
     // Recover modifiers held before the video gained focus, and release ones
     // whose keyup was consumed locally. Preserve left/right when observed.
     for (const [flag, left, right] of modifiers) {
@@ -52,11 +49,20 @@ export function createKeyboardInput(send: (data: KeyBehavior) => void) {
         if (pressed.has(right)) emit(right, true);
       }
     }
+  }
+  function handle(event: KeyEvent, up: boolean) {
+    const key = Object.hasOwn(physicalKeys, event.code) ? physicalKeys[event.code] : undefined;
+    if (key === undefined) return;
+    event.preventDefault();
+    // A key released after blur/reset must not recreate held modifiers.
+    if (up && !pressed.has(key)) return;
+    syncModifiers(event, key);
     if (!up || pressed.has(key)) emit(key, up);
   }
   return {
     down: (event: KeyEvent) => handle(event, false),
     up: (event: KeyEvent) => handle(event, true),
+    syncModifiers,
     // The caller sends the existing release-all message on blur/Escape/close.
     reset: () => pressed.clear(),
   };

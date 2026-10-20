@@ -60,10 +60,10 @@ test('cancellation, blur, focus loss and missing release reconcile held buttons'
   f.window.emit('mouseup', { button: 0 });
   assert.equal(f.sent.filter(item => item[0] === 'up').length, 0);
 });
-test('unrelated releases, right buttons and disconnected sessions do not inject input', t => {
+test('unrelated releases, unsupported buttons and disconnected sessions do not inject input', t => {
   const f = fixture(t);
   f.window.emit('mouseup', { button: 0 });
-  f.area.emit('mousedown', { target: f.video, button: 2 });
+  f.area.emit('mousedown', { target: f.video, button: 4 });
   assert.equal(f.sent.length, 0);
   f.down(); f.deactivate();
   f.window.emit('mouseup', { button: 0 });

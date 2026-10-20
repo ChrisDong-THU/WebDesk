@@ -64,7 +64,7 @@ namespace WebDesk.Native {
             if(a<1||a>255||(flags&~3)!=0) throw new InvalidDataException();
             input.type=1; input.value.key.key=(ushort)a; input.value.key.flags=(uint)flags;
           } else if(kind==0) {
-            if((flags&~0xD81F)!=0 || Math.Abs((long)data)>1200000) throw new InvalidDataException();
+            if((flags&~0xD87F)!=0 || Math.Abs((long)data)>1200000) throw new InvalidDataException();
             // Tag remote mouse events so our own caption buttons can avoid
             // a modal tracking loop that would stall Flutter input delivery.
             // Must match kWebDeskRemoteMouseTag in remote_caption_buttons.h.
@@ -78,7 +78,7 @@ namespace WebDesk.Native {
           }
           if(!ok) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(),"Windows rejected input");
           if(kind==1) { if((flags&2)!=0) keys.Remove((ushort)a); else keys[(ushort)a]=(uint)(flags&1); }
-          else { if((flags&2)!=0) buttons|=2; if((flags&4)!=0) buttons&=~2u; if((flags&8)!=0) buttons|=8; if((flags&16)!=0) buttons&=~8u; }
+          else { if((flags&2)!=0) buttons|=2; if((flags&4)!=0) buttons&=~2u; if((flags&8)!=0) buttons|=8; if((flags&16)!=0) buttons&=~8u; if((flags&32)!=0) buttons|=32; if((flags&64)!=0) buttons&=~32u; }
         }
       }
     }
@@ -86,7 +86,7 @@ namespace WebDesk.Native {
       try { Bind(); } catch { return; }
       foreach(var key in keys) { var i=new Win32.Input();i.type=1;i.value.key.key=key.Key;i.value.key.flags=2|key.Value;Win32.SendInput(1,new[]{i},Marshal.SizeOf(typeof(Win32.Input))); }
       keys.Clear();
-      if(buttons!=0) { var i=new Win32.Input();i.value.mouse.flags=((buttons&2)!=0?4u:0)|((buttons&8)!=0?16u:0);Win32.SendInput(1,new[]{i},Marshal.SizeOf(typeof(Win32.Input))); buttons=0; }
+      if(buttons!=0) { var i=new Win32.Input();i.value.mouse.flags=((buttons&2)!=0?4u:0)|((buttons&8)!=0?16u:0)|((buttons&32)!=0?64u:0);Win32.SendInput(1,new[]{i},Marshal.SizeOf(typeof(Win32.Input))); buttons=0; }
     }
     // Raw BGRA for native WebRTC. Cached bitmap, no JPEG/canvas round trip.
     byte[] RawFrame(int maxHeight) {

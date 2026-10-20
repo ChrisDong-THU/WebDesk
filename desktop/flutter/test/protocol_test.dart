@@ -9,6 +9,27 @@ import 'package:webdesk/tools/tool_channel.dart';
 
 void main() {
   test(
+    'physical button edges inject one transition each, including middle',
+    () {
+      for (final entry in {2: 2, 4: 4, 3: 8, 5: 16, 18: 32, 19: 64}.entries) {
+        final packet = encodeBehavior({'type': entry.key}, 1920, 1080)!;
+        expect(packet.length, 21);
+        expect(
+          ByteData.sublistView(packet).getInt32(13, Endian.little),
+          entry.value,
+        );
+      }
+      final flags = [2, 4, 2, 4]
+          .map(
+            (type) => ByteData.sublistView(
+              encodeBehavior({'type': type}, 1920, 1080)!,
+            ).getInt32(13, Endian.little),
+          )
+          .toList();
+      expect(flags, [2, 4, 2, 4]);
+    },
+  );
+  test(
     'browser punctuation fixtures encode Windows press and release keys',
     () {
       final cases =

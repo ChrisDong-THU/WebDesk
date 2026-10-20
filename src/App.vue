@@ -13,11 +13,7 @@ const showPassword = ref(false), copied = ref(false);
 const deviceLabel = computed(() => deviceId.value.replace(/(\d{3})(?=\d)/g, '$1 '));
 const remoteVisible = computed(() => !isHost && inSession.value);
 let copyTimer: ReturnType<typeof setTimeout>;
-function leaveFullscreen(event: KeyboardEvent) {
-  if (event.key === 'Escape' && document.fullscreenElement === viewport.value) void document.exitFullscreen().catch(() => {});
-}
-window.addEventListener('keydown', leaveFullscreen);
-onBeforeUnmount(() => { clearTimeout(copyTimer); window.removeEventListener('keydown', leaveFullscreen); });
+onBeforeUnmount(() => clearTimeout(copyTimer));
 async function copyInfo() {
   try { await navigator.clipboard.writeText(`WebDesk\n设备代码：${deviceId.value}\n连接密码：${password.value}`); copied.value = true; copyTimer = setTimeout(() => copied.value = false, 2000); }
   catch { error.value = '复制失败，请手动复制设备代码和密码'; }
@@ -25,7 +21,7 @@ async function copyInfo() {
 async function fullscreen() {
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
-    else { await viewport.value?.requestFullscreen(); video.value?.querySelector('video')?.focus(); }
+    else { await viewport.value?.requestFullscreen(); video.value?.querySelector('video')?.focus({ preventScroll: true }); }
   }
   catch { error.value = '浏览器未允许全屏'; }
 }
@@ -141,7 +137,7 @@ watch(remoteVisible, visible => {
         <span>{{ stats.path }}</span><span>{{ stats.width }} × {{ stats.height }}</span>
         <span>{{ stats.fps.toFixed(0) }} FPS</span><span>{{ (stats.bitrate / 1000).toFixed(2) }} Mbps</span>
         <span v-if="stats.codec" :title="stats.mediaDiagnostics">{{ stats.codec }}</span>
-        <span>{{ stats.rtt.toFixed(0) }} ms</span><span class="keyboard-tip"><kbd>Esc</kbd> 释放键盘</span>
+        <span>{{ stats.rtt.toFixed(0) }} ms</span><span class="keyboard-tip">全屏时 <kbd>Esc</kbd> 释放键盘</span>
       </footer>
       <div v-if="error" class="error-box" role="alert">{{ error }}</div>
     </section>

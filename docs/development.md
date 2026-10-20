@@ -1,6 +1,6 @@
 # 开发指南
 
-适用版本：0.5.7。本文说明代码结构、本地开发、测试和构建；服务器部署见[自部署指南](self-hosting.md)。
+适用版本：0.5.8。本文说明代码结构、本地开发、测试和构建；服务器部署见[自部署指南](self-hosting.md)。
 
 ## 架构与来源
 
@@ -37,6 +37,14 @@ flowchart LR
 - 锁屏和安全桌面控制依赖已安装的原生服务，仍需通过 Windows 登录认证。
 
 上游代码来源见 [billd-desk 清单](../third_party/billd-desk/manifest.json)、[billd-desk-server 清单](../third_party/billd-desk-server/manifest.json)和[原生依赖清单](../native/flutter/dependencies.json)。托盘插件保存在 `third_party/tray_manager/`，来源与修改范围记录于其 `upstream.json`。`electron-main/` 仅用于兼容测试，不属于发行客户端。许可证见[第三方声明](../THIRD_PARTY_NOTICES.md)，权限边界见[安全策略](../SECURITY.md)。
+
+### 键鼠输入
+
+网页通过 `src/core/controller-input.ts` 统一处理输入，使用可靠有序的数据通道发送。鼠标左右键和中键发送成对的按下/松开事件，双击由 Windows 根据两组事件识别；浏览器的 `click`、`dblclick` 和 `contextmenu` 不额外生成点击。按钮和滚轮操作前同步位置，拖出画面时将坐标限制在视频边界。
+
+Windows 客户端串行处理输入，只合并相邻的鼠标移动，不跨越按键或按钮事件。页面隐藏、失焦、退出控制或连接关闭时释放输入状态。
+
+键盘按物理键位传输，字符由远端布局和输入法决定。网页全屏时，`Esc` 退出全屏并释放本地键盘焦点；非全屏且视频获得焦点时，`Esc` 正常传给远端。浏览器或操作系统保留的快捷键、鼠标侧键、本地输入法的组合文本和 `Ctrl+Alt+Delete` 安全注意序列不在支持范围内。中文可使用远端输入法或文本剪贴板。
 
 ## 开发环境
 
@@ -141,10 +149,10 @@ try {
 npm run build:inno
 ```
 
-构建会运行版本校验、原生回归、Flutter 分析和测试，使用生产入口 `lib/main.dart` 编译，并校验依赖、管理员清单和音频库。输出位于 `flutter-release/0.5.7/`：
+构建会运行版本校验、原生回归、Flutter 分析和测试，使用生产入口 `lib/main.dart` 编译，并校验依赖、管理员清单和音频库。输出位于 `flutter-release/0.5.8/`：
 
-- `WebDesk-0.5.7-win-x64.exe`：安装包。
-- `WebDesk-0.5.7-win-x64.exe.sha256`：校验文件。
+- `WebDesk-0.5.8-win-x64.exe`：安装包。
+- `WebDesk-0.5.8-win-x64.exe.sha256`：校验文件。
 - `build.json`：构建信息及对应 payload 目录。
 
 构建命令不安装应用。`npm run build:flutter` 仅生成程序目录；`npm run preview:installer` 预览安装界面。代码签名需由发行者配置。

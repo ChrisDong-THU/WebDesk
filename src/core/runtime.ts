@@ -6,16 +6,13 @@ import { createWebRTCClass } from '../billd/webRTC';
 import { createRemoteDesk } from '../billd/remoteDesk';
 import { registerRemoteReceivers } from '../billd/receive';
 import { createHostPage } from '../billd/host';
-import { createControllerPage } from '../billd/controller';
 import { createInputDispatch } from '../billd/ipc';
 import { handlConstraints, videoFullBox } from '../billd/utils';
 import { registerControllerSettings } from '../billd/settings';
 import { validQuality } from '../../shared/protocol.mjs';
 import { DesktopTools, type ToolsOptions } from './tools';
 import { HostCapture } from './host-capture';
-import { createKeyboardInput } from './keyboard';
-import { createWheelNormalizer } from './wheel';
-import { bindPointerInput } from './pointer';
+import { bindControllerInput } from './controller-input';
 import type { CaptureSource, NativeCommand } from '../../shared/desktop';
 export type { CaptureSource, NativeCommand } from '../../shared/desktop';
 
@@ -56,7 +53,7 @@ export class BilldDeskRuntime {
   private currentVideoContentHint;
   private nativeHeight = 0;
   private capture?: HostCapture;
-  private keyboard?: ReturnType<typeof createKeyboardInput>;
+  private controllerInput?: ReturnType<typeof bindControllerInput>;
   tools?: DesktopTools;
 
   constructor(private options: Options) {
@@ -197,8 +194,7 @@ export class BilldDeskRuntime {
     if (!this.closed) await this.callbacks.get(signal.msgType)?.(signal.data);
   }
   releaseInput() {
-    this.keyboard?.reset();
-    this.rtc?.dataChannelSend({ msgType: 'billdDeskBehavior', requestId: 'release', data: { type: 17 } });
+    this.controllerInput?.release();
   }
   updateQuality(value: Quality) {
     if (this.closed || !this.ready || this.options.role !== 'controller') throw Error('远程连接尚未就绪');
@@ -227,48 +223,18 @@ export class BilldDeskRuntime {
     this.cleanup.push(() => { observer.disconnect(); video.removeEventListener('loadedmetadata', resize); });
   }
   private bindController() {
-    const wheel = createWheelNormalizer();
-    const page = createControllerPage({ networkStore: this.networkStore, receiverId: this.receiverId,
-      mySocketId: this.mySocketId, roomId: this.roomId, isWatchMode: Object.freeze({ value: false }) });
-    const bind = (target: EventTarget, type: string, callback: (event: any) => void) => {
-      const guarded = (event: Event) => {
-        if (!this.ready || this.closed) return;
-        if (event instanceof KeyboardEvent && !this.options.container.contains(document.activeElement)) return;
-        if (event instanceof MouseEvent && event.target !== this.video) return;
-        if (event instanceof KeyboardEvent && event.code === 'Escape') { pointer.reset(); this.releaseInput(); this.video?.blur(); return; }
-        pointer.flush();
-        callback(event);
-      };
-      target.addEventListener(type, guarded, { passive: false });
-      this.cleanup.push(() => target.removeEventListener(type, guarded));
-    };
-    const area = this.options.container;
-    const pointer = bindPointerInput({
-      area, window, video: () => this.video, active: () => this.ready && !this.closed,
-      down: page.handleMouseDown, move: page.handleMouseMove, up: page.handleMouseUp,
-      cancel: () => this.releaseInput(),
+    this.controllerInput = bindControllerInput({
+      area: this.options.container, window, document,
+      video: () => this.video, active: () => this.ready && !this.closed,
+      focused: () => document.activeElement === this.video,
       congested: () => (this.dataChannel?.bufferedAmount ?? 0) > 16 * 1024,
+      send: data => this.rtc?.dataChannelSend({
+        msgType: 'billdDeskBehavior', requestId: crypto.randomUUID(),
+        data: { key: [0], x: 0, y: 0, amount: 0, ...data,
+          roomId: this.roomId.value, sender: this.mySocketId.value, receiver: this.receiverId.value },
+      }),
     });
-    this.cleanup.push(pointer.dispose);
-    bind(area, 'dblclick', page.handleDoublelclick);
-    bind(area, 'contextmenu', page.handleContextmenu);
-    bind(area, 'wheel', (event: WheelEvent) => {
-      event.preventDefault();
-      // Keep upstream routing/directions; only adapt the browser's units.
-      page.handleMouseWheel(new WheelEvent('wheel', wheel.normalize(event)));
-    });
-    this.keyboard = createKeyboardInput(data => this.rtc?.dataChannelSend({
-      msgType: 'billdDeskBehavior', requestId: crypto.randomUUID(),
-      data: { ...data, roomId: this.roomId.value, sender: this.mySocketId.value,
-        receiver: this.receiverId.value, x: 0, y: 0, amount: 0 },
-    }));
-    bind(window, 'keydown', this.keyboard.down);
-    bind(window, 'keyup', this.keyboard.up);
-    const release = () => { pointer.reset(); wheel.reset(); this.releaseInput(); };
-    area.addEventListener('focusout', release);
-    window.addEventListener('blur', release);
-    this.cleanup.push(() => { area.removeEventListener('focusout', release); window.removeEventListener('blur', release); });
-    this.cleanup.push(page.dispose);
+    this.cleanup.push(this.controllerInput.dispose);
   }
   private async collectStats() {
     const pc = this.peerConnection;
@@ -305,6 +271,7 @@ export class BilldDeskRuntime {
   }
   close() {
     if (this.closed) return;
+    this.controllerInput?.release();
     this.closed = true;
     this.capture?.stop();
     clearInterval(this.timer);

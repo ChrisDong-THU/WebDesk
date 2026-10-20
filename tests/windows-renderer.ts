@@ -80,6 +80,11 @@ async function run() {
     await wait(() => !!controller!.video?.videoWidth && ready, 'Video/control did not connect', forceRelay ? 40000 : 15000);
     hostSocket.emit('session-ready', { sessionId: joined.sessionId }); controllerSocket.emit('session-ready', { sessionId: joined.sessionId });
     const video = controller.video!;
+    const receivedInput: Array<{ type: number }> = [];
+    host.rtc.cbDataChannel.addEventListener('message', (event: MessageEvent) => {
+      const message = JSON.parse(event.data);
+      if (message.msgType === 'billdDeskBehavior') receivedInput.push(message.data);
+    });
     for (const peer of [host, controller]) {
       const channel = peer.dataChannel!;
       if (!channel.ordered || channel.maxRetransmits !== null || channel.maxPacketLifeTime !== null) {
@@ -96,6 +101,49 @@ async function run() {
     video.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, clientX: rect.left + 20, clientY: rect.top + 20 }));
     video.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0, clientX: rect.left + 20, clientY: rect.top + 20 }));
     await wait(() => commands.some(item => item.channel === 'mouseReleaseButtonLeft'), 'Initial mouse release missing');
+    const initialDown = commands.findIndex(item => item.channel === 'mousePressButtonLeft');
+    const clickPosition = commands.slice(0, initialDown).filter(item => item.channel === 'mouseMove').at(-1)?.command.data;
+    if (!clickPosition || Math.abs(clickPosition.x - source.width * source.scaleFactor * 20 / rect.width) > 2 ||
+        Math.abs(clickPosition.y - source.height * source.scaleFactor * 20 / rect.height) > 2) {
+      throw Error(`Click position mismatch: ${JSON.stringify({ clickPosition, width: source.width, height: source.height,
+        scale: source.scaleFactor, rect: { width: rect.width, height: rect.height }, commands: commands.slice(0, initialDown + 1) })}`);
+    }
+    const doubleStart = commands.length;
+    for (let i = 0; i < 2; i++) {
+      for (const type of ['mousedown', 'mouseup', 'click']) {
+        video.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, button: 0,
+          buttons: type === 'mousedown' ? 1 : 0, detail: i + 1, clientX: rect.left + 30, clientY: rect.top + 30 }));
+      }
+    }
+    video.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, button: 0, detail: 2 }));
+    controller.releaseInput(); // Ordered barrier after all double-click messages.
+    await wait(() => commands.slice(doubleStart).some(item => item.channel === 'webdesk:release'), 'Double-click barrier missing');
+    const doubleButtons = commands.slice(doubleStart).filter(item =>
+      ['mousePressButtonLeft', 'mouseReleaseButtonLeft', 'mouseDoubleClick', 'mouseLeftClick'].includes(item.channel));
+    if (doubleButtons.map(item => item.channel).join(',') !==
+        'mousePressButtonLeft,mouseReleaseButtonLeft,mousePressButtonLeft,mouseReleaseButtonLeft') {
+      throw Error('Double-click injected extra or missing mouse transitions');
+    }
+    const rightStart = receivedInput.length;
+    video.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 2, buttons: 2, clientX: rect.left + 40, clientY: rect.top + 40 }));
+    video.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 }));
+    document.body.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 2, clientX: rect.right + 50, clientY: rect.bottom + 50 }));
+    controller.releaseInput();
+    await wait(() => receivedInput.slice(rightStart).some(item => item.type === 17), 'Right-drag barrier missing');
+    // The legacy Electron IPC adapter has no right/middle edge dispatch.
+    // Assert the wire consumed by Flutter; its protocol tests check Win32 flags.
+    const rightButtons = receivedInput.slice(rightStart).filter(item => [3, 5, 9].includes(item.type));
+    if (rightButtons.map(item => item.type).join(',') !== '3,5') {
+      throw Error('Right drag injected extra or missing mouse transitions');
+    }
+    const middleStart = receivedInput.length;
+    video.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 1, buttons: 4, clientX: rect.left + 40, clientY: rect.top + 40 }));
+    video.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 1, clientX: rect.left + 40, clientY: rect.top + 40 }));
+    video.dispatchEvent(new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 }));
+    controller.releaseInput();
+    await wait(() => receivedInput.slice(middleStart).some(item => item.type === 17), 'Middle-click barrier missing');
+    const middleButtons = receivedInput.slice(middleStart).filter(item => [18, 19].includes(item.type));
+    if (middleButtons.map(item => item.type).join(',') !== '18,19') throw Error('Middle button transitions missing');
     const dragStart = commands.length;
     video.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, buttons: 1, clientX: rect.left + 20, clientY: rect.top + 20 }));
     document.body.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0, clientX: rect.right + 50, clientY: rect.bottom + 50 }));
@@ -113,12 +161,18 @@ async function run() {
       await wait(() => ['keyboardPressKey', 'keyboardReleaseKey'].every(channel => commands.slice(start).some(item => item.channel === channel && item.command.data.key[0] === expected)), `Keyboard mapping failed: ${code}`);
     }
     await wait(() => ['mouseMove', 'mousePressButtonLeft', 'mouseReleaseButtonLeft', 'mouseScrollDown', 'keyboardPressKey', 'keyboardReleaseKey'].every(channel => commands.some(item => item.channel === channel)), 'Original input handlers failed');
-    const move = commands.find(item => item.channel === 'mouseMove')!.command.data;
-    if (Math.abs(move.x - source.width * source.scaleFactor / 2) > 2 || Math.abs(move.y - source.height * source.scaleFactor / 2) > 2) throw Error('Original normalized coordinate path differs');
     if (commands.find(item => item.channel === 'mouseScrollDown')!.command.data.amount !== 1) throw Error('Wheel pixels were not normalized to one detent');
+    const escapeStart = commands.length;
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Escape', key: 'Escape' }));
-    await wait(() => commands.some(item => item.channel === 'webdesk:release'), 'Escape did not release input');
-    if (document.activeElement === video) throw Error('Escape did not release video focus');
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'Escape', key: 'Escape' }));
+    await wait(() => ['keyboardPressKey', 'keyboardReleaseKey'].every(channel =>
+      commands.slice(escapeStart).some(item => item.channel === channel && item.command.data.key[0] === 0)), 'Non-fullscreen Escape was not delivered');
+    if (document.activeElement !== video) throw Error('Non-fullscreen Escape released video focus');
+    video.blur();
+    // This harness uses an unfocused, hidden BrowserWindow. Chromium does not
+    // dispatch native focus events there; simulate the browser's focusout edge.
+    video.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+    await wait(() => commands.slice(escapeStart).some(item => item.channel === 'webdesk:release'), 'Blur did not release input');
     const before = commands.length;
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyB', key: 'b' }));
     window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyB', key: 'b' }));
@@ -183,7 +237,9 @@ async function run() {
     const media = { width: video.videoWidth, height: video.videoHeight, capture: nativeCapture, resolutions, selectedPath, automaticBitrate: true };
     host.close(); controller.close();
     if (track.readyState !== 'ended' || area.querySelector('video')) throw Error('Original lifecycle cleanup failed');
-    window.smoke.report({ ok: true, version, upstreamChain: true, nativeRecovery: !!source.nativeDesktop, liveSettingsWithoutReconnect: true, tools: { uploadBytes: incoming.length, downloadBytes: outgoing.length, clipboard: true }, media, inputChannels: [...new Set(commands.map(item => item.channel))], nativeInputInjected: false, serverUrl, forceRelay: !!forceRelay });
+    window.smoke.report({ ok: true, version, upstreamChain: true, nativeRecovery: !!source.nativeDesktop,
+      input: { doubleClickTransitions: doubleButtons.length, rightDragTransitions: rightButtons.length, middleClickTransitions: middleButtons.length },
+      liveSettingsWithoutReconnect: true, tools: { uploadBytes: incoming.length, downloadBytes: outgoing.length, clipboard: true }, media, inputChannels: [...new Set(commands.map(item => item.channel))], nativeInputInjected: false, serverUrl, forceRelay: !!forceRelay });
   } catch (error) { window.smoke.report({ ok: false, error: String(error) }); }
   finally { host?.close(); controller?.close(); hostSocket?.disconnect(); controllerSocket?.disconnect(); window.RTCPeerConnection = OriginalPeer; }
 }

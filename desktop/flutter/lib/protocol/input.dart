@@ -59,6 +59,10 @@ Uint8List? encodeBehavior(Map data, int width, int height) {
         mouse(4);
       case 5:
         mouse(16);
+      case 18:
+        mouse(32);
+      case 19:
+        mouse(64);
       case 7:
         mouse(2);
         mouse(4);

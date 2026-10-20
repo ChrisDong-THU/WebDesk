@@ -1,7 +1,7 @@
 name: webdesk
 description: WebDesk Windows host for the existing browser controller.
 publish_to: none
-version: 0.5.7+8
+version: 0.5.8+9
 environment:
   sdk: '>=3.8.0 <4.0.0'
 dependencies:

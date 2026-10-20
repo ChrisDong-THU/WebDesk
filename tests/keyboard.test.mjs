@@ -71,10 +71,23 @@ test('repeat remains usable; unsupported/IME codes never send string keys', () =
   const { keyboard, sent, event } = setup();
   keyboard.down(event('Period')); keyboard.down(event('Period')); keyboard.up(event('Period'));
   assert.equal(sent.length, 3);
-  for (const code of ['Unidentified', 'Process', 'Fn', 'toString', 'Escape']) {
+  for (const code of ['Unidentified', 'Process', 'Fn', 'toString']) {
     const unknown = event(code);
     keyboard.down(unknown); keyboard.up(unknown);
     assert.equal(unknown.prevented, false);
   }
   assert.equal(sent.length, 3);
+});
+
+test('stale keyup after reset cannot recreate a modifier; mouse modifiers recover on demand', () => {
+  const { keyboard, sent, event } = setup();
+  keyboard.down(event('KeyA', { ctrlKey: true }));
+  keyboard.reset();
+  const before = sent.length;
+  keyboard.up(event('KeyA', { ctrlKey: true }));
+  assert.equal(sent.length, before);
+  keyboard.syncModifiers(event('KeyA', { ctrlKey: true }));
+  keyboard.syncModifiers(event('KeyA', { ctrlKey: true }));
+  keyboard.syncModifiers(event('KeyA'));
+  assert.deepEqual(sent.slice(before), [{ type: 15, key: [103] }, { type: 16, key: [103] }]);
 });

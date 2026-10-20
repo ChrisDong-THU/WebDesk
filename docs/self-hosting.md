@@ -1,6 +1,6 @@
 # 自部署指南
 
-适用版本：0.5.7。以下方案使用 Linux、Node.js 22、systemd 和 Nginx；需要公网中继时配置 Coturn。网页、服务端和 Windows 客户端应同步更新，并连接同一服务地址。
+适用版本：0.5.8。以下方案使用 Linux、Node.js 22、systemd 和 Nginx；需要公网中继时配置 Coturn。网页、服务端和 Windows 客户端应同步更新，并连接同一服务地址。
 
 ## 构建与上传
 
@@ -77,7 +77,7 @@ sudo systemctl enable webdesk
 ```sh
 archive=/tmp/webdesk-XXXXXX.tar.gz
 digest=$(awk '{print $1}' "$archive.sha256")
-sudo bash /tmp/activate-release.sh 0.5.7 "$archive" "$digest"
+sudo bash /tmp/activate-release.sh 0.5.8 "$archive" "$digest"
 ```
 
 脚本依次校验 SHA-256 和包版本、安装运行依赖、切换 `/opt/webdesk/current`、重启服务，并检查本机 `/health` 的状态和版本。脚本健康检查固定使用 `127.0.0.1:4300`，更改监听配置时需同步调整。
@@ -125,7 +125,7 @@ sudo systemctl status webdesk nginx
 sudo journalctl -u webdesk -n 100 --no-pager
 ```
 
-健康接口应返回 `status: "ok"` 和 `version: "0.5.7"`。启用 Coturn 时另查其服务状态。
+健康接口应返回 `status: "ok"` 和 `version: "0.5.8"`。启用 Coturn 时另查其服务状态。
 
 使用两台设备验证连接、键鼠、双向文件、文本剪贴板和声音；在无法直连的网络验证 TURN 中继，并检查实际连接路径。Windows 客户端的托盘、UAC、锁屏与恢复验收见[开发指南](development.md#发布验收)。
 
