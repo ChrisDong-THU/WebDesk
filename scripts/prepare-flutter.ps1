@@ -21,8 +21,16 @@ $plugin = Join-Path $root 'third_party\flutter-webrtc'
 Ensure-Checkout $manifest.flutter $sdk
 Ensure-Checkout $manifest.flutterWebrtc $plugin
 $patch = Join-Path $root 'native\flutter\flutter-webrtc.patch'
-& git -C $plugin apply --reverse --check $patch 2>$null
-if ($LASTEXITCODE -ne 0) {
+# A fresh checkout is expected to fail the reverse-patch probe. Windows
+# PowerShell 5 turns redirected native stderr into a terminating error under
+# Stop, so inspect the exit code without aborting before the forward apply.
+$savedErrorPreference = $ErrorActionPreference
+try {
+  $ErrorActionPreference = 'Continue'
+  & git -C $plugin apply --reverse --check $patch 2>$null
+  $alreadyPatched = $LASTEXITCODE -eq 0
+} finally { $ErrorActionPreference = $savedErrorPreference }
+if (-not $alreadyPatched) {
   Invoke-Git @('-C', $plugin, 'apply', '--check', $patch)
   Invoke-Git @('-C', $plugin, 'apply', $patch)
 }
