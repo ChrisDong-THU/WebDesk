@@ -1,0 +1,40 @@
+diff --git a/windows/task_runner_windows.cc b/windows/task_runner_windows.cc
+index 0c47ab5..8943dd9 100644
+--- a/windows/task_runner_windows.cc
++++ b/windows/task_runner_windows.cc
+@@ -54,11 +54,24 @@
+    // Even though it would usually be sufficient to process only a single task
+    // whenever we receive the message, if the message queue happens to be full,
+    // we might not receive a message for each individual task.
+-   for (;;) {
++   size_t remaining;
++   {
+      std::lock_guard<std::mutex> lock(tasks_mutex_);
+-     if (tasks_.empty()) break;
+-     TaskClosure task = tasks_.front();
+-     tasks_.pop();
++     remaining = tasks_.size();
++   }
++   // Bound each dispatch so continuous remote input cannot starve window
++   // messages. Tasks added by callbacks have their own posted wake-up.
++   while (remaining-- > 0) {
++     TaskClosure task;
++     {
++       std::lock_guard<std::mutex> lock(tasks_mutex_);
++       // A callback may pump a nested Windows message loop.
++       if (tasks_.empty()) break;
++       task = std::move(tasks_.front());
++       tasks_.pop();
++     }
++     // Flutter/native callbacks may enqueue work or re-enter ProcessTasks.
++     // Never invoke or destroy their captures while holding the queue lock.
+      task();
+    }
+  }
+@@ -103,4 +116,4 @@
+    }
+  }
+  
+- }  // namespace flutter_webrtc_plugin
+\ No newline at end of file
++ }  // namespace flutter_webrtc_plugin

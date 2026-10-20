@@ -111,7 +111,7 @@ class WebRTCClass {
         this.update();
       } catch (error) {
         console.error('getStats错误');
-        console.log(error);
+
       }
     }, 1000);
   };
@@ -122,17 +122,7 @@ class WebRTCClass {
   }) => {
     const { msg, type } = data;
     if (type === 'success') {
-      console.log(
-        `%c ` +
-          `【WebRTCClass】${new Date().toLocaleString()},房间id:${
-            this.roomId
-          }` +
-          ` %c ${msg} ` +
-          `%c`,
-        'background:#35495e ; padding: 1px; border-radius: 3px 0 0 3px;  color: #fff',
-        'background:#41b883 ; padding: 1px; border-radius: 0 3px 3px 0;  color: #fff',
-        'background:transparent'
-      );
+
     } else {
       console[type || 'log'](
         `【WebRTCClass】${new Date().toLocaleString()},房间id:${this.roomId}`,
@@ -143,7 +133,7 @@ class WebRTCClass {
 
   /** 设置最大码率 */
   setMaxBitrate = (maxBitrate: number) => {
-    console.log('开始设置最大码率', maxBitrate);
+
     return new Promise<number>((resolve) => {
       this.peerConnection?.getSenders().forEach((sender) => {
         if (sender.track?.kind === 'video') {
@@ -151,7 +141,7 @@ class WebRTCClass {
           if (parameters.encodings[0]) {
             const val = 1000 * maxBitrate;
             if (parameters.encodings[0].maxBitrate === val) {
-              console.log('最大码率不变，不设置');
+
               resolve(1);
               return;
             }
@@ -159,7 +149,7 @@ class WebRTCClass {
             sender
               .setParameters(parameters)
               .then(() => {
-                console.log('设置最大码率成功', maxBitrate);
+
                 this.maxBitrate = val;
                 resolve(1);
               })
@@ -254,10 +244,10 @@ class WebRTCClass {
     this.prettierLog({ msg: '开始监听pc的track事件', type: 'warn' });
     this.peerConnection.addEventListener('track', (event) => {
       this.prettierLog({ msg: 'pc收到track事件', type: 'warn' });
-      console.log('track事件的event', event);
-      console.log('track事件的stream', event.streams[0]);
-      console.log('track事件的视频轨', event.streams[0].getVideoTracks());
-      console.log('track事件的音频轨', event.streams[0].getAudioTracks());
+
+
+
+
 
       const stream = event.streams[0];
       this.localStream = stream;
@@ -369,7 +359,7 @@ class WebRTCClass {
           },
         });
       } else {
-        console.log('没有候选者了');
+
       }
     });
 
@@ -396,7 +386,7 @@ class WebRTCClass {
             msg: 'webrtc连接成功！',
             type: 'success',
           });
-          console.log('sender', this.sender, 'receiver', this.receiver);
+
           this.update();
         }
         if (iceConnectionState === 'completed') {
@@ -507,7 +497,7 @@ class WebRTCClass {
       console.error('dataChannel未连接成功，不发送消息！', msgType, data);
       return;
     }
-    console.log('dataChannel发送消息', msgType);
+
     this.dataChannel.send(
       JSON.stringify({
         msgType,
@@ -522,7 +512,7 @@ class WebRTCClass {
       console.error('dataChannel未连接成功，不发送消息！');
       return;
     }
-    console.log('dataChannelSendBlob发送消息');
+
     this.dataChannel.send(blob);
   };
 
@@ -544,13 +534,7 @@ class WebRTCClass {
       };
       this.dataChannel = this.peerConnection.createDataChannel(
         'MessageChannel',
-        {
-          // maxRetransmits，用户代理应尝试重新传输在不可靠模式下第一次失败的消息的最大次数。虽然该值是 16 位无符号数，但每个用户代理都可以将其限制为它认为合适的任何最大值。
-          maxRetransmits: 3,
-          // ordered，表示通过 RTCDataChannel 的信息的到达顺序需要和发送顺序一致 (true), 或者到达顺序不需要和发送顺序一致 (false). 默认：true
-          ordered: false,
-          // protocol: 'udp',
-        }
+        { ordered: true }
       );
       this.dataChannel.onopen = () => {
         this.prettierLog({
@@ -613,7 +597,7 @@ class WebRTCClass {
   /** 更新store */
   update = () => {
     const networkStore = useNetworkStore();
-    console.log('更新store', this.receiver);
+
     networkStore.rtcMap.set(this.receiver, { ...this });
   };
 }

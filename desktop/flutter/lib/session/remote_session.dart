@@ -7,6 +7,10 @@ import '../native/system_audio.dart';
 import '../protocol/input.dart';
 import '../protocol/quality.dart';
 import '../tools/tool_channel.dart';
+import 'peer_connection.dart';
+import 'cleanup.dart';
+import 'input_queue.dart';
+import 'media_stats.dart';
 
 class RemoteSession {
   RemoteSession({
@@ -16,6 +20,8 @@ class RemoteSession {
     required this.onReady,
     required this.onError,
     this.diagnostic,
+    this.desktopFactory,
+    this.connectionFactory,
   });
   final String id;
   Quality quality;
@@ -23,7 +29,15 @@ class RemoteSession {
   final void Function() onReady;
   final void Function(Object) onError;
   final void Function(String)? diagnostic;
-  late final desktop = DesktopBridge(_fail, diagnostic: diagnostic);
+  final DesktopBridge Function(void Function(Object))? desktopFactory;
+  final Future<RTCPeerConnection> Function(Map<String, dynamic>)?
+  connectionFactory;
+  late final desktop =
+      desktopFactory?.call(_fail) ??
+      DesktopBridge(_fail, diagnostic: diagnostic);
+  late final _inputs = InputQueue((bytes) async {
+    await desktop.request(bytes);
+  }, _fail);
   RTCPeerConnection? _pc;
   MediaStream? _stream;
   RTCRtpSender? _sender;
@@ -32,21 +46,32 @@ class RemoteSession {
   final _audio = SystemAudio();
   final _candidates = <RTCIceCandidate>[];
   Future<void> _settings = Future.value();
+  Future<void>? _starting, _closing;
+  Future<void> _signals = Future.value();
+  final _mediaStats = MediaStats();
+  Future<Map<String, dynamic>>? _sampling;
+  DateTime? _sampledAt;
+  bool _samplingPending = false;
   bool _closed = false, _remoteSet = false, _ready = false;
   Timer? _status;
   bool _polling = false;
   String? _secureId;
   DateTime? _secureStarted;
 
-  Future<void> start(List<dynamic> ice) async {
+  Future<void> start(List<dynamic> ice) {
+    if (_closed) return Future.error(StateError('会话已结束'));
+    return _starting ??= _start(ice);
+  }
+
+  Future<void> _start(List<dynamic> ice) async {
     await desktop.start();
     if (_closed) return;
-    final pc = await createPeerConnection({
+    final pc = await (connectionFactory ?? createPeerConnection)({
       'iceServers': ice,
       'sdpSemantics': 'unified-plan',
     });
     if (_closed) {
-      await pc.dispose();
+      await closePeerConnection(pc);
       return;
     }
     _pc = pc;
@@ -70,26 +95,33 @@ class RemoteSession {
     };
     _input = await pc.createDataChannel(
       'MessageChannel',
-      RTCDataChannelInit()
-        ..ordered = false
-        ..maxRetransmits = 3,
+      RTCDataChannelInit()..ordered = true,
     );
+    if (_closed) return;
     _input!.onDataChannelState = (_) => _checkReady();
-    _tools = await ToolChannel.create(pc, setAudioEnabled: _audio.setEnabled);
+    _tools = await ToolChannel.create(
+      pc,
+      setAudioEnabled: _audio.setEnabled,
+      getMediaStats: _getMediaStats,
+    );
+    if (_closed) return;
     await _capture();
     if (_closed) return;
     _sender = await pc.addTrack(_stream!.getVideoTracks().first, _stream!);
+    if (_closed) return;
     final audioStream = await _audio.create();
     if (_closed) return;
     // Both tracks advertise the same stream so the upstream browser video
     // receives picture and sound together. No renegotiation on audio toggles.
     await pc.addTrack(audioStream.getAudioTracks().single, _stream!);
+    if (_closed) return;
     await _applyParameters();
     final offer = await pc.createOffer({
       'offerToReceiveAudio': false,
       'offerToReceiveVideo': false,
     });
     await pc.setLocalDescription(offer);
+    if (_closed) return;
     if (!_closed) signal('nativeWebRtcOffer', {'sdp': offer.toMap()});
     _status = Timer.periodic(const Duration(milliseconds: 500), (_) async {
       if (_polling || _closed) return;
@@ -141,13 +173,23 @@ class RemoteSession {
       });
     }
     if (_closed) {
-      if (_secureId != null) await SecureCapture.stop(_secureId!);
-      await _disposeStream(stream);
+      await cleanup({
+        'cancelled secure capture': () async {
+          if (_secureId != null) await SecureCapture.stop(_secureId!);
+          _secureId = null;
+        },
+        'cancelled stream': () => _disposeStream(stream),
+      });
       return;
     }
     final old = _stream;
-    if (_sender != null) {
-      await _sender!.replaceTrack(stream.getVideoTracks().first);
+    try {
+      if (_sender != null) {
+        await _sender!.replaceTrack(stream.getVideoTracks().first);
+      }
+    } catch (_) {
+      await _disposeStream(stream);
+      rethrow;
     }
     _stream = stream;
     if (old != null) await _disposeStream(old);
@@ -195,12 +237,7 @@ class RemoteSession {
       if (json['msgType'] == 'billdDeskBehavior') {
         final input = encodeBehavior(data, desktop.width, desktop.height);
         if (input != null) {
-          unawaited(
-            desktop.request(input).catchError((Object e) {
-              _fail(e);
-              return input;
-            }),
-          );
+          _inputs.add(input, move: data['type'] == 0);
         }
       } else if ([
         'changeMaxFramerate',
@@ -228,7 +265,13 @@ class RemoteSession {
     }
   }
 
-  Future<void> receive(Map data) async {
+  Future<void> receive(Map data) {
+    final operation = _signals.then((_) => _receive(data));
+    _signals = operation.catchError((Object _) {});
+    return operation;
+  }
+
+  Future<void> _receive(Map data) async {
     if (_closed) return;
     final pc = _pc;
     if (pc == null) throw StateError('媒体连接未就绪');
@@ -273,31 +316,73 @@ class RemoteSession {
     if (!_closed) onError(error);
   }
 
-  static Future<void> _disposeStream(MediaStream stream) async {
-    for (final track in stream.getTracks()) {
-      await track.stop();
+  Future<Map<String, dynamic>> _getMediaStats() {
+    if (_closed || _pc == null) return Future.error(StateError('会话已结束'));
+    if (_sampling == null ||
+        (!_samplingPending &&
+            DateTime.now().difference(_sampledAt!).inMilliseconds >= 1000)) {
+      _samplingPending = true;
+      _sampledAt = DateTime.now();
+      _sampling = _pc!
+          .getStats()
+          .then(
+            (reports) => {
+              ..._mediaStats.sample(reports),
+              'capture': _secureId == null ? 'desktop' : 'secure',
+            },
+          )
+          .whenComplete(() => _samplingPending = false);
     }
-    await stream.dispose();
+    return _sampling!;
   }
 
-  Future<void> close() async {
-    if (_closed) return;
+  static Future<void> _disposeStream(MediaStream stream) => cleanup({
+    for (final track in stream.getTracks()) 'track ${track.id}': track.stop,
+    'stream ${stream.id}': stream.dispose,
+  });
+
+  Future<void> close() {
+    if (_closing != null) return _closing!;
     _closed = true;
     _status?.cancel();
-    await _audio.close();
-    try {
-      await desktop.release();
-    } catch (_) {}
-    desktop.close();
-    if (_secureId != null) {
-      await SecureCapture.stop(_secureId!);
-      _secureId = null;
+    return _closing = _close();
+  }
+
+  Future<void> _close() async {
+    // Set _closed first; in-flight creators either publish an owned resource or
+    // dispose it themselves. Drain them before taking the final resource set.
+    for (final operation in [_starting, _signals, _settings]) {
+      try {
+        await operation;
+      } catch (_) {
+        /* Reported by the operation owner. */
+      }
     }
-    await _tools?.close();
-    await _input?.close();
-    await _pc?.close();
-    await _pc?.dispose();
-    if (_stream != null) await _disposeStream(_stream!);
-    _stream = null;
+    await cleanup({
+      'audio': _audio.close,
+      'input queue': _inputs.close,
+      'input release': desktop.release,
+      'desktop bridge': desktop.close,
+      'secure capture': () async {
+        if (_secureId != null) await SecureCapture.stop(_secureId!);
+        _secureId = null;
+      },
+      'tools': () async {
+        await _tools?.close();
+      },
+      'input channel': () async {
+        await _input?.close();
+      },
+      'media statistics': () async {
+        try {
+          await _sampling;
+        } catch (_) {}
+      },
+      'peer connection': () => closePeerConnection(_pc),
+      'video stream': () async {
+        if (_stream != null) await _disposeStream(_stream!);
+        _stream = null;
+      },
+    });
   }
 }

@@ -141,7 +141,7 @@ function handleKeyCombination(event: KeyboardEvent) {
     const key = event.key.toLowerCase();
     ENGLISH_LETTER.forEach((item) => {
       if (item === key) {
-        console.log(`Ctrl+${key} 被按下`);
+
         networkStore.rtcMap
           .get(receiverId.value)
           ?.dataChannelSend<WsBilldDeskBehaviorType['data']>({
@@ -170,7 +170,7 @@ function handleKeyCombination(event: KeyboardEvent) {
     const key = event.key.toLowerCase();
     ENGLISH_LETTER.forEach((item) => {
       if (item === key) {
-        console.log(`MetaKey+${key} 被按下`);
+
         networkStore.rtcMap
           .get(receiverId.value)
           ?.dataChannelSend<WsBilldDeskBehaviorType['data']>({
@@ -234,7 +234,7 @@ function handleContextmenu() {
 }
 function handleMouseDown(event: MouseEvent) {
   clickTimer = setTimeout(function () {
-    console.log('长按');
+
     isLongClick = true;
     clearTimeout(clickTimer);
   }, 300);
@@ -250,9 +250,9 @@ function handleMouseDown(event: MouseEvent) {
   const yInsideElement = clickY - rect.top;
   const x = (xInsideElement / rect.width) * 1000;
   const y = (yInsideElement / rect.height) * 1000;
-  console.log('handleMouseDown', x, y, xInsideElement, yInsideElement);
+
   if (event.button === 2) {
-    console.log('handleMouseDown-当前是鼠标右键');
+
     return;
   }
   networkStore.rtcMap
@@ -286,14 +286,7 @@ function handleMouseMove(event: MouseEvent) {
   const x = (xInsideElement / rect.width) * 1000;
   const y = (yInsideElement / rect.height) * 1000;
   const requestId = getRandomString(8);
-  console.log(
-    'handleMouseMove',
-    requestId,
-    x,
-    y,
-    xInsideElement,
-    yInsideElement
-  );
+
   networkStore.rtcMap
     .get(receiverId.value)
     ?.dataChannelSend<WsBilldDeskBehaviorType['data']>({
@@ -327,9 +320,9 @@ function handleMouseUp(event: MouseEvent) {
   const yInsideElement = clickY - rect.top;
   const x = (xInsideElement / rect.width) * 1000;
   const y = (yInsideElement / rect.height) * 1000;
-  console.log('handleMouseUp', x, y, xInsideElement, yInsideElement);
+
   if (event.button === 2) {
-    console.log('handleMouseUp-当前是鼠标右键');
+
     return;
   }
   networkStore.rtcMap

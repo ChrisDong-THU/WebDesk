@@ -9,14 +9,28 @@ import 'package:webdesk/native/secure_capture.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:window_manager/window_manager.dart';
 
-Future<void> main(List<String> args) async {
+class TestWindowListener with WindowListener {
+  @override
+  void onWindowClose() => unawaited(windowManager.hide());
+}
+
+void main(List<String> args) {
+  runZonedGuarded(() => run(args), (error, stack) {
+    stderr.writeln('$error\n$stack');
+    exit(1);
+  });
+}
+
+Future<void> run(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
-  if (args.length != 2 ||
+  if ((args.length != 2 && args.length != 3) ||
       Uri.parse(args[0]).host != '127.0.0.1' ||
       Uri.parse(args[1]).host != '127.0.0.1') {
     exit(2);
   }
   await windowManager.ensureInitialized();
+  windowManager.addListener(TestWindowListener());
+  await windowManager.setPreventClose(true);
   await windowManager.setTitle('WebDesk Flutter 联调');
   runApp(
     const MaterialApp(
@@ -45,8 +59,6 @@ Future<void> main(List<String> args) async {
     stdout.writeln('bridge probe failed: $error');
     bridge.close();
     exit(1);
-  } finally {
-    bridge.close();
   }
   final captureResults = <Map<String, int>>[];
   for (final height in [720, 4320]) {
@@ -79,6 +91,68 @@ Future<void> main(List<String> args) async {
       await renderer.dispose();
     }
   }
+  // Exercise actual plugin/source destruction, including rapid frame-rate
+  // changes. A mock cannot catch pure virtual calls inside libwebrtc.dll.
+  for (var i = 0; i < 30; i++) {
+    final sources = await desktopCapturer.getSources(
+      types: [SourceType.Screen],
+    );
+    final stream = await navigator.mediaDevices.getDisplayMedia({
+      'audio': false,
+      'video': {
+        'deviceId': {'exact': sources.first.id},
+        'mandatory': {'frameRate': i.isEven ? 30 : 60},
+      },
+    });
+    await Future<void>.delayed(Duration(milliseconds: 5 + (i % 5) * 13));
+    for (final track in stream.getTracks()) {
+      await track.stop();
+    }
+    await stream.dispose();
+  }
+  stdout.writeln('native capture lifetime: 30 rapid start/stop cycles passed');
+  final control = await HttpServer.bind(InternetAddress.loopbackIPv4, 44302);
+  final keepAlive = Timer.periodic(const Duration(seconds: 5), (_) async {
+    try {
+      await bridge.status();
+    } catch (error) {
+      stdout.writeln('control bridge: $error');
+    }
+  });
+  control.listen((request) async {
+    request.response.headers.contentType = ContentType.json;
+    try {
+      final action = request.uri.path;
+      if (action == '/status') {
+        await bridge.status();
+        request.response.write(
+          jsonEncode({
+            'secure': bridge.secure,
+            'connected': host.connected,
+            'error': host.error,
+          }),
+        );
+      } else if (['/show', '/inspect'].contains(action) ||
+          (action == '/lock' && args.length == 3 && args[2] == 'lock-test')) {
+        final probe = File(Platform.resolvedExecutable).parent.parent.parent.uri
+            .resolve('task-runner/flutter-window-probe.exe');
+        final result = await Process.run(probe.toFilePath(), [
+          '$pid',
+          action.substring(1),
+        ]);
+        if (result.exitCode != 0) {
+          throw StateError('Window probe ${result.exitCode}: ${result.stderr}');
+        }
+        request.response.write(result.stdout);
+      } else {
+        request.response.statusCode = 404;
+      }
+    } catch (error) {
+      request.response.statusCode = 500;
+      request.response.write(jsonEncode({'error': '$error'}));
+    }
+    await request.response.close();
+  });
   Future<void> report(Map data) async {
     final request = await client.postUrl(Uri.parse('${args[1]}/host'));
     request.headers.contentType = ContentType.json;
@@ -100,6 +174,8 @@ Future<void> main(List<String> args) async {
             'password': host.password,
             'nativeWidth': bridge.width,
             'nativeHeight': bridge.height,
+            'pid': pid,
+            'lockTest': args.length == 3,
           });
         }
       } finally {
@@ -119,6 +195,9 @@ Future<void> main(List<String> args) async {
       if (text == 'yes') {
         timer.cancel();
         await host.disable();
+        keepAlive.cancel();
+        bridge.close();
+        await control.close(force: true);
         client.close();
         exit(0);
       }

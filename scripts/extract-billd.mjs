@@ -18,6 +18,20 @@ function block(file, name) {
   return record(file, name, node.getText(ast));
 }
 function record(file, name, code) { records.push({ file, name, sha256: createHash('sha256').update(code).digest('hex') }); return code; }
+function withoutDebugLogs(code) {
+  const ast = ts.createSourceFile('adapter.ts', code, ts.ScriptTarget.Latest, true);
+  const ranges = [];
+  function visit(node) {
+    if (ts.isExpressionStatement(node) && ts.isCallExpression(node.expression) &&
+        node.expression.expression.getText(ast) === 'console.log') {
+      ranges.push([node.getStart(ast), node.end]); return;
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(ast);
+  for (const [start, end] of ranges.reverse()) code = code.slice(0, start) + code.slice(end);
+  return code.replace(/^[\t ]+$/gm, '');
+}
 function write(file, text) {
   const result = '// @ts-nocheck\n// GENERATED from billd-desk ' + revision + ' (MIT).\n// Run npm run upstream:check; edit extraction/adapters, not this file.\n' + text + '\n';
   if (check) { if (fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n') !== result) throw Error(`Upstream drift: ${file}`); }
@@ -31,10 +45,14 @@ write('src/billd/keys.ts', "import { Key } from '@nut-tree-fork/shared/dist/lib/
 write('src/billd/params.ts', "import { ref } from 'vue';\nimport { MediaTypeEnum } from './enums';\n" + block('src/hooks/use-rtcParams.ts', 'useRTCParams'));
 write('src/billd/stores.ts', "import { defineStore } from 'pinia';\nimport { LiveLineEnum, LiveRenderEnum } from './enums';\n" + block('src/store/app/index.ts', 'useAppStore') + '\n' + block('src/store/network/index.ts', 'useNetworkStore'));
 let rtc = block('src/utils/network/webRTC.ts', 'WebRTCClass').replace('export class', 'class');
-// The sole media-class change: use the authenticated deployment's ICE servers.
+// Deployment adapters: authenticated ICE servers and reliable input ordering.
 const iceStart = rtc.indexOf('const iceServers = this.isSRS');
 const iceEnd = rtc.indexOf('this.peerConnection = new RTCPeerConnection', iceStart);
 rtc = rtc.slice(0, iceStart) + 'const iceServers = this.isSRS ? [] : environment.iceServers;\n      ' + rtc.slice(iceEnd);
+const channelOptions = /('MessageChannel',\s*)\{[\s\S]*?\}/;
+if (!channelOptions.test(rtc)) throw Error('Missing upstream MessageChannel options');
+rtc = rtc.replace(channelOptions, '$1{ ordered: true }');
+rtc = withoutDebugLogs(rtc);
 write('src/billd/webRTC.ts', "import { getRandomString } from 'billd-utils';\nimport { LiveLineEnum, MediaTypeEnum, WsMsgTypeEnum } from './enums';\nexport function createWebRTCClass(environment) {\nconst useAppStore = () => environment.appStore;\nconst useNetworkStore = () => environment.networkStore;\n" + rtc + '\nreturn WebRTCClass;\n}');
 write('src/billd/remoteDesk.ts', "import { ref } from 'vue';\nimport { getRandomString } from 'billd-utils';\nimport { useRTCParams } from './params';\nimport { WsMsgTypeEnum } from './enums';\nexport function createRemoteDesk(environment) {\nconst { WebRTCClass } = environment;\nconst useAppStore = () => environment.appStore;\nconst useNetworkStore = () => environment.networkStore;\n" + block('src/hooks/webrtc/remoteDesk.ts', 'useWebRtcRemoteDesk').replace('export const', 'const') + '\nreturn useWebRtcRemoteDesk();\n}');
 
@@ -72,7 +90,7 @@ const settingWatches = settingNames.map(name => {
   return record(controlFile, `${name} watch`, node.getText(controlAst));
 });
 write('src/billd/settings.ts', "import { watch } from 'vue';\nimport { getRandomString } from 'billd-utils';\nimport { WsMsgTypeEnum } from './enums';\nexport function registerControllerSettings(environment) {\nconst { networkStore, receiverId, roomId, currentMaxBitrate, currentMaxFramerate, currentResolutionRatio, currentVideoContentHint } = environment;\n" + settingWatches.join('\n') + '\n}');
-write('src/billd/controller.ts', "import { getRandomString } from 'billd-utils';\nimport { NUT_KEY_MAP } from './keys';\nimport { BilldDeskBehaviorEnum, WsMsgTypeEnum } from './enums';\nconst ENGLISH_LETTER = 'abcdefghijklmnopqrstuvwxyz'.split('');\nexport function createControllerPage(environment) {\nconst { networkStore, receiverId, mySocketId, roomId, isWatchMode } = environment;\nlet clickTimer;\nlet isLongClick = false;\n" + controllerNames.map(n => block(controlFile, n)).join('\n') + '\nreturn { ' + controllerNames.join(', ') + ', dispose: () => clearTimeout(clickTimer) };\n}');
+write('src/billd/controller.ts', "import { getRandomString } from 'billd-utils';\nimport { NUT_KEY_MAP } from './keys';\nimport { BilldDeskBehaviorEnum, WsMsgTypeEnum } from './enums';\nconst ENGLISH_LETTER = 'abcdefghijklmnopqrstuvwxyz'.split('');\nexport function createControllerPage(environment) {\nconst { networkStore, receiverId, mySocketId, roomId, isWatchMode } = environment;\nlet clickTimer;\nlet isLongClick = false;\n" + controllerNames.map(n => withoutDebugLogs(block(controlFile, n))).join('\n') + '\nreturn { ' + controllerNames.join(', ') + ', dispose: () => clearTimeout(clickTimer) };\n}');
 
 // Renderer-to-Electron dispatch is the original hook, including coordinate
 // conversion and separate input channels. Only its environment is injected.
@@ -91,7 +109,7 @@ function visit(node) {
 visit(nativeAst);
 if (nativeBlocks.length !== allowed.length) throw Error('Missing native handler');
 write('electron-main/billd/handlers.ts', "import { IPC_EVENT } from '../../src/billd/events';\nexport function registerNativeHandlers(environment) {\nconst { ipcMain, nutjs, windowMap, winWebContentsSend, desktopCapturer, screen, platform } = environment;\n" + nativeBlocks.join('\n') + '\n}');
-const manifest = JSON.stringify({ revision, policy: 'Core blocks are extracted verbatim. WebRTC ICE configuration is the only rewritten block; wrapper code supplies dependencies and deployment interfaces.', blocks: records }, null, 2) + '\n';
+const manifest = JSON.stringify({ revision, policy: 'Source blocks are hashed before deterministic adapters: authenticated ICE, reliable ordered input, and removal of controller/WebRTC console.log calls. Wrapper code supplies dependencies and deployment interfaces.', blocks: records }, null, 2) + '\n';
 if (check) { if (fs.readFileSync('third_party/billd-desk/manifest.json','utf8').replace(/\r\n/g, '\n') !== manifest) throw Error('Manifest drift'); }
 else fs.writeFileSync('third_party/billd-desk/manifest.json', manifest);
 console.log(`Verified ${records.length} upstream blocks at ${revision}`);

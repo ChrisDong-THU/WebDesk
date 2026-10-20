@@ -22,6 +22,39 @@ test('six requested quality presets remain compatible with the deployed signalin
   assert.equal(validQuality({ ...DEFAULT_QUALITY, resolutionRatio: '4320' }), false);
 });
 
+test('generated control transport preserves reliable ordering for press, release and settings', async t => {
+  await build({ entryPoints: ['src/billd/webRTC.ts'], outfile: 'test-results/control-transport.mjs', bundle: true, platform: 'node', format: 'esm' });
+  const { createWebRTCClass } = await import('../test-results/control-transport.mjs');
+  const sent = [];
+  class Peer {
+    addEventListener() {}
+    createDataChannel(label, options) {
+      assert.equal(label, 'MessageChannel');
+      assert.equal(options.ordered, true);
+      assert.equal(options.maxRetransmits, undefined);
+      assert.equal(options.maxPacketLifeTime, undefined);
+      return { readyState: 'open', send: value => sent.push(JSON.parse(value)), close() {} };
+    }
+    close() {}
+  }
+  const oldWindow = globalThis.window, oldPeer = globalThis.RTCPeerConnection;
+  globalThis.window = { RTCPeerConnection: Peer };
+  globalThis.RTCPeerConnection = Peer;
+  t.after(() => { globalThis.window = oldWindow; globalThis.RTCPeerConnection = oldPeer; });
+  const RTC = createWebRTCClass({
+    iceServers: [], appStore: { remoteDesk: new Map() }, networkStore: { rtcMap: new Map() },
+  });
+  const rtc = new RTC({ roomId: 'test', sender: 'controller', receiver: 'host', isSRS: false, videoEl: { remove() {} } });
+  t.after(() => rtc.close());
+  for (const message of [
+    { msgType: 'billdDeskBehavior', data: { type: 15, key: [71] } },
+    { msgType: 'billdDeskBehavior', data: { type: 16, key: [71] } },
+    { msgType: 'changeMaxFramerate', data: { val: 30 } },
+    { msgType: 'billdDeskBehavior', data: { type: 17 } },
+  ]) rtc.dataChannelSend(message);
+  assert.deepEqual(sent.map(value => value.data), [{ type: 15, key: [71] }, { type: 16, key: [71] }, { val: 30 }, { type: 17 }]);
+});
+
 test('upstream IPC handlers execute original native operations without OS input', async () => {
   await mkdir('test-results/native', { recursive: true });
   await build({ entryPoints: ['electron-main/billd/handlers.ts'], outfile: 'test-results/native/handlers.cjs', bundle: true, platform: 'node', format: 'cjs' });

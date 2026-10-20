@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import '../session/cleanup.dart';
 // Pinned native adapter, as for SecureCapture. PCM never crosses Dart IPC.
 // ignore: implementation_imports
 import 'package:flutter_webrtc/src/native/media_stream_impl.dart';
@@ -9,6 +10,7 @@ class SystemAudio {
   MediaStream? _stream;
   bool _closed = false;
   Future<void> _pending = Future.value();
+  Future<void>? _closing;
 
   Future<MediaStream> create() async {
     final data = await _channel.invokeMapMethod<String, dynamic>(
@@ -40,8 +42,12 @@ class SystemAudio {
     return enabled;
   }
 
-  Future<void> close() async {
+  Future<void> close() {
     _closed = true;
+    return _closing ??= _close();
+  }
+
+  Future<void> _close() async {
     await _pending;
     await _dispose();
   }
@@ -50,15 +56,11 @@ class SystemAudio {
     final stream = _stream;
     _stream = null;
     if (stream == null) return;
-    try {
-      await _channel.invokeMethod<void>('webdeskAudioDispose', {
-        'id': stream.id,
-      });
-    } finally {
-      for (final track in stream.getTracks()) {
-        await track.stop();
-      }
-      await stream.dispose();
-    }
+    await cleanup({
+      'native audio': () =>
+          _channel.invokeMethod<void>('webdeskAudioDispose', {'id': stream.id}),
+      for (final track in stream.getTracks()) 'track ${track.id}': track.stop,
+      'audio stream': stream.dispose,
+    });
   }
 }

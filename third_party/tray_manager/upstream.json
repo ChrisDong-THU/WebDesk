@@ -1,0 +1,27 @@
+{
+  "source": "https://pub.dev/packages/tray_manager/versions/0.5.3",
+  "archiveSha256": "1a659b08baa6e9b91ef8ce16eda37740de398be1c4cf322b8a1ddfef25c68c5a",
+  "upstreamFiles": {
+    "lib/src/helpers/sandbox.dart": "1021776920b46e71a0df4799d67203c42b476b49f4ed6f1ef9b282ea63852f96",
+    "lib/src/tray_listener.dart": "2f3deddf7c21559c7ecba71bd251ceae25bed56d5c76361e657445da8040a08d",
+    "lib/src/tray_manager.dart": "3894e5a02cbdf6c909c28a9337dcc1407e53750e0d7300dfc782bbddb1f6c9e4",
+    "lib/tray_manager.dart": "4fef1adfe5a2ae5fc1c29e1d20a37f9a982f65b7d868c5e28989a7c78cee502b",
+    "LICENSE": "516e1f470fd0e4c5c6cf02b6876153a9145283660a5de03fe9812b207dc34db5",
+    "linux/CMakeLists.txt": "6d501afd1063822fe57ecee8fac5273325353bdc088f08cdf61021cd79281e95",
+    "linux/include/tray_manager/tray_manager_plugin.h": "03976eb69eb619178383625d5e372c8c196e20751e750183a4128af5b1f9f738",
+    "linux/tray_manager_plugin.cc": "0d75580ecac214eac3ea827433d1f1a59e9556913949ea3e9ea789e98abfc045",
+    "macos/tray_manager/Classes/TrayIcon.swift": "01550fd5f375a29a3e44554aa9ae58e71d949c350738308edc6846354d12bba3",
+    "macos/tray_manager/Classes/TrayManagerPlugin.swift": "fabf65c0a9142faaa7e95847630beac1a61162519e1aa2c32f1693e8c229fc60",
+    "macos/tray_manager/Classes/TrayMenu.swift": "2ef9732769fbf1e9c8ee0f321af70f328e384e9b2c34b746ed68600b7d3ff46e",
+    "macos/tray_manager/Package.swift": "462b19f0cf871e31fa0ce9cab581e9db3d51ef48fd806b2507fb073b3e4c4d6f",
+    "macos/tray_manager.podspec": "63588e76e8e235250464f45af07f2b907f3578fbf0be05d77aaa6cdde04bdb80",
+    "pubspec.yaml": "5a6e0684c0a7bfbb8475b20d847f1f8c19e20d8c53ba19d8f53318b957565645",
+    "windows/CMakeLists.txt": "719b6b4df2889eddbd120b67a1d343e91d766fc1f3b107a639540165ef7aab42",
+    "windows/include/tray_manager/tray_manager_plugin.h": "1a752e85e4382fbbdc7232ec3512a158364efd38bd191135bb14e4be59b2887c",
+    "windows/tray_manager_plugin.cpp": "24e19d45827a6d9ded599d1f3c3a7a1d0acc2ef095daf8ae784378a974be4460"
+  },
+  "localChanges": {
+    "windows/tray_manager_plugin.cpp": "Foreground popup lifecycle, scoped command dispatch, reentrancy guard, initialized and idempotently released native handles",
+    "windows/tray_menu.h": "Shared production/test popup function with foreground ownership and WM_NULL"
+  }
+}

@@ -64,6 +64,13 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  // Handle caption clicks (including legacy untagged remote input) before
+  // the native/plugin window procs
+  // can enter a modal mouse-tracking loop on the RTC dispatch thread.
+  if (auto result = remote_caption_buttons_.HandleMessage(hwnd, message, wparam, lparam)) {
+    return *result;
+  }
+
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
     std::optional<LRESULT> result =

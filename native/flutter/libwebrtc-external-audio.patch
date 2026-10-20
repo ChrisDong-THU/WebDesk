@@ -1,0 +1,33 @@
+diff --git a/src/rtc_peerconnection_factory_impl.cc b/src/rtc_peerconnection_factory_impl.cc
+--- a/src/rtc_peerconnection_factory_impl.cc
++++ b/src/rtc_peerconnection_factory_impl.cc
+@@ -168,7 +168,11 @@ void RTCPeerConnectionFactoryImpl::CreateAudioDeviceModule_w() {
+   if (!audio_device_module_) {
+     audio_device_module_ = webrtc::CreateAudioDeviceModule(
+         env_,
+-        webrtc::AudioDeviceModule::kPlatformDefaultAudio,
++        // WebDesk supplies system PCM through its independent WASAPI source.
++        // Never create a hardware ADM: upstream send/mute paths can initialize
++        // or restart recording even after SetAudioRecording(false).
++        // The dummy ADM cannot open microphones or trigger Windows ducking.
++        webrtc::AudioDeviceModule::kDummyAudio,
+         false);
+     // Initialize the ADM eagerly so device enumeration (RecordingDevices/
+     // PlayoutDevices) works before a PeerConnection has been created. On
+diff --git a/src/rtc_peerconnection_impl.cc b/src/rtc_peerconnection_impl.cc
+--- a/src/rtc_peerconnection_impl.cc
++++ b/src/rtc_peerconnection_impl.cc
+@@ -461,6 +461,13 @@ bool RTCPeerConnectionImpl::Initialize() {
+   }
+ 
+   rtc_peerconnection_ = result.MoveValue();
++  // WebDesk is a system-audio sender, not a microphone/VoIP application.
++  // Custom sources bypass the ADM, but adding an RTP audio sender still
++  // starts its default microphone unless recording is explicitly disabled.
++  // Disable hardware I/O before SDP or tracks can start it. Custom WASAPI
++  // frames continue through the RTP sender; receiving uses the null poller.
++  rtc_peerconnection_->SetAudioRecording(false);
++  rtc_peerconnection_->SetAudioPlayout(false);
+   return true;
+ }
+ 

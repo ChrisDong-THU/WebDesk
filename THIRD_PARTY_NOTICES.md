@@ -13,6 +13,7 @@ Generated files identify their source and extraction scripts. UI, authentication
 
 - Flutter SDK/engine — BSD-3-Clause. Pinned in `native/flutter/dependencies.json`. SDK license ships in `licenses/flutter.txt`; Flutter/Dart dependency notices are retained in `data/flutter_assets/NOTICES.Z`.
 - flutter-webrtc — MIT. The source is modified by `native/flutter/flutter-webrtc.patch`; the upstream license ships in `licenses/flutter-webrtc.txt`.
+- tray_manager 0.5.3 — MIT, Copyright (c) 2022-present LiJianying. Runtime sources and original file hashes are retained in `third_party/tray_manager`; Windows menu/handle lifecycle fixes are WebDesk modifications. The license ships in `licenses/tray-manager.txt`.
 - libwebrtc C++ wrapper — MIT, with the upstream Apache-2.0 NOTICE for Intel/OWT modifications. Both the wrapper license and NOTICE accompany the installer.
 - WebRTC — BSD-style license and additional patent grant. Texts and supplemental dependency licenses are in `third_party/licenses/`, copied into the installer's `licenses/native/`. `native/sources.json` records pinned source URLs and hashes. This collection includes optional/build-time dependencies and is not a binary dependency inventory. Dependency upgrades or changed native build flags require reviewing these notices again.
 - Microsoft Visual C++ runtime — redistributed from the selected Visual Studio toolchain under Microsoft's redistributable terms, not relicensed as MIT.

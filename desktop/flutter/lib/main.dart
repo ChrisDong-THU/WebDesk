@@ -7,6 +7,8 @@ import 'package:window_manager/window_manager.dart';
 import 'package:tray_manager/tray_manager.dart';
 
 import 'session/host_controller.dart';
+import 'session/cleanup.dart';
+import 'native/tray_menu.dart';
 import 'ui/host_view.dart';
 
 Future<void> main() async {
@@ -50,6 +52,9 @@ class HostPage extends StatefulWidget {
 class _HostPageState extends State<HostPage> with WindowListener, TrayListener {
   final host = HostController();
   final address = TextEditingController();
+  final trayMenu = TrayMenu(() => trayManager.popUpContextMenu());
+  bool trayReady = false;
+  String trayError = '';
   bool quitting = false;
   @override
   void initState() {
@@ -62,7 +67,7 @@ class _HostPageState extends State<HostPage> with WindowListener, TrayListener {
         if (mounted) address.text = host.server;
       }),
     );
-    unawaited(_tray());
+    unawaited(_tray().catchError(_trayFailed));
   }
 
   void _changed() {
@@ -71,7 +76,12 @@ class _HostPageState extends State<HostPage> with WindowListener, TrayListener {
 
   Future<void> _tray() async {
     await windowManager.setPreventClose(true);
+    if (!mounted || quitting) return;
     await trayManager.setIcon('assets/webdesk.ico');
+    if (!mounted || quitting) {
+      await trayManager.destroy();
+      return;
+    }
     await trayManager.setToolTip('WebDesk');
     await trayManager.setContextMenu(
       Menu(
@@ -82,11 +92,22 @@ class _HostPageState extends State<HostPage> with WindowListener, TrayListener {
         ],
       ),
     );
+    if (mounted && !quitting) trayReady = true;
+  }
+
+  void _trayFailed(Object error) {
+    if (mounted && !quitting) {
+      setState(() => trayError = '托盘操作失败：$error');
+    }
   }
 
   @override
   void onWindowClose() {
-    if (!quitting) unawaited(windowManager.hide());
+    // If tray initialization failed, keep a reachable window instead of
+    // hiding the only way the user can interact with the application.
+    if (!quitting && trayReady) {
+      unawaited(windowManager.hide().catchError(_trayFailed));
+    }
   }
 
   @override
@@ -96,12 +117,20 @@ class _HostPageState extends State<HostPage> with WindowListener, TrayListener {
 
   @override
   void onTrayIconRightMouseDown() {
-    unawaited(trayManager.popUpContextMenu());
+    if (trayReady && !quitting) {
+      unawaited(trayMenu.open().catchError(_trayFailed));
+    }
   }
 
   Future<void> _show() async {
-    await windowManager.show();
-    await windowManager.focus();
+    if (quitting || !mounted) return;
+    try {
+      if (await windowManager.isMinimized()) await windowManager.restore();
+      await windowManager.show();
+      await windowManager.focus();
+    } catch (error) {
+      _trayFailed(error);
+    }
   }
 
   @override
@@ -113,14 +142,23 @@ class _HostPageState extends State<HostPage> with WindowListener, TrayListener {
   Future<void> _quit() async {
     if (quitting) return;
     quitting = true;
-    await host.disable();
-    await trayManager.destroy();
-    await windowManager.destroy();
-    exit(0);
+    trayMenu.dispose();
+    try {
+      await cleanup({
+        'remote session': host.disable,
+        'tray': trayManager.destroy,
+        'window': windowManager.destroy,
+      });
+    } catch (error) {
+      stderr.writeln(error);
+    } finally {
+      exit(0);
+    }
   }
 
   @override
   void dispose() {
+    trayMenu.dispose();
     windowManager.removeListener(this);
     trayManager.removeListener(this);
     host.removeListener(_changed);
@@ -138,8 +176,12 @@ class _HostPageState extends State<HostPage> with WindowListener, TrayListener {
     connectingBrowser: host.connectingBrowser,
     device: host.device,
     password: host.password,
-    error: host.error,
+    error: [
+      host.error,
+      trayError,
+    ].where((value) => value.isNotEmpty).join('\n'),
     onToggle: () => host.enabled ? host.disable() : host.enable(address.text),
+    onRegenerate: host.regenerate,
     onCopy: () => Clipboard.setData(
       ClipboardData(
         text: 'WebDesk\n设备代码：${host.device}\n连接密码：${host.password}',

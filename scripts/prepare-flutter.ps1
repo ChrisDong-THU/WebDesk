@@ -1,3 +1,4 @@
+param([switch]$SkipAudioBuild)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $manifest = Get-Content (Join-Path $root 'native\flutter\dependencies.json') -Raw | ConvertFrom-Json
@@ -29,19 +30,22 @@ if ($LASTEXITCODE -ne 0 -or $tagCommit -ne $manifest.flutter.commit) {
   throw 'Flutter release tag does not match the pinned commit'
 }
 Ensure-Checkout $manifest.flutterWebrtc $plugin
-$patch = Join-Path $root 'native\flutter\flutter-webrtc.patch'
-# A fresh checkout is expected to fail the reverse-patch probe. Windows
-# PowerShell 5 turns redirected native stderr into a terminating error under
-# Stop, so inspect the exit code without aborting before the forward apply.
-$savedErrorPreference = $ErrorActionPreference
-try {
-  $ErrorActionPreference = 'Continue'
-  & git -C $plugin apply --reverse --check $patch 2>$null
-  $alreadyPatched = $LASTEXITCODE -eq 0
-} finally { $ErrorActionPreference = $savedErrorPreference }
-if (-not $alreadyPatched) {
-  Invoke-Git @('-C', $plugin, 'apply', '--check', $patch)
-  Invoke-Git @('-C', $plugin, 'apply', $patch)
+# Keep fixes separate so existing checkouts with the base patch can upgrade.
+foreach ($patchName in @('flutter-webrtc.patch', 'flutter-webrtc-task-runner.patch', 'flutter-webrtc-capture-lifetime.patch', 'flutter-webrtc-external-audio.patch')) {
+  $patch = Join-Path $root "native\flutter\$patchName"
+  # A fresh checkout is expected to fail the reverse-patch probe. Windows
+  # PowerShell 5 turns redirected native stderr into a terminating error under
+  # Stop, so inspect the exit code without aborting before the forward apply.
+  $savedErrorPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = 'Continue'
+    & git -C $plugin apply --reverse --check $patch 2>$null
+    $alreadyPatched = $LASTEXITCODE -eq 0
+  } finally { $ErrorActionPreference = $savedErrorPreference }
+  if (-not $alreadyPatched) {
+    Invoke-Git @('-C', $plugin, 'apply', '--check', $patch)
+    Invoke-Git @('-C', $plugin, 'apply', $patch)
+  }
 }
 # Pin and verify the binary before upstream CMake sees its download cache.
 $archive = Join-Path $plugin 'third_party\downloads\libwebrtc-win-x64-release.zip'
@@ -50,6 +54,7 @@ if (-not (Test-Path -LiteralPath $archive)) {
   Invoke-WebRequest -Uri $manifest.libwebrtc.url -OutFile $archive
 }
 if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $manifest.libwebrtc.sha256) { throw 'libwebrtc checksum mismatch' }
+if (-not $SkipAudioBuild) { & (Join-Path $PSScriptRoot 'build-libwebrtc.ps1') }
 $env:PUB_CACHE = Join-Path $root '.tools\pub-cache'
 $flutter = Join-Path $sdk 'bin\flutter.bat'
 $app = Join-Path $root 'desktop\flutter'
@@ -64,6 +69,18 @@ try {
   $dependencies = Get-Content $dependenciesPath -Raw | ConvertFrom-Json
   foreach ($item in $dependencies.plugins.windows) {
     $link = Join-Path $links $item.name
+    if (Test-Path -LiteralPath $link) {
+      $existing = Get-Item -LiteralPath $link
+      if ($existing.LinkType -notin @('Junction', 'SymbolicLink')) {
+        throw "Expected a plugin link, not a real directory: $link"
+      }
+      $target = [IO.Path]::GetFullPath($item.path).TrimEnd('\','/')
+      $actual = [IO.Path]::GetFullPath(@($existing.Target)[0]).TrimEnd('\','/')
+      if ($actual -ne $target) {
+        # Delete only the stale junction itself, never recurse into its target.
+        [IO.Directory]::Delete($link)
+      }
+    }
     if (-not (Test-Path -LiteralPath $link)) { New-Item -ItemType Junction -Path $link -Target $item.path | Out-Null }
   }
   & $flutter pub get --enforce-lockfile

@@ -1,4 +1,12 @@
+param([switch]$UseInstalledHelper, [switch]$LockScreen)
 $ErrorActionPreference = 'Stop'
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+try {
+  $principal = New-Object Security.Principal.WindowsPrincipal($identity)
+  if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    throw 'Run this integration script in an elevated Windows PowerShell. No service changes have been made.'
+  }
+} finally { $identity.Dispose() }
 $root = Split-Path $PSScriptRoot -Parent
 $testRoot = Join-Path $root 'test-results\flutter-integration'
 $originalService = 'C:\Program Files\WebDesk Native\WebDeskNative.exe'
@@ -16,12 +24,17 @@ New-Item -ItemType Directory -Force $backupDir | Out-Null
 $backup = Join-Path $backupDir 'WebDeskNative.exe'
 Copy-Item -LiteralPath $originalService -Destination $backup -Force
 $helper = Join-Path $testRoot 'WebDeskNative.exe'
+if ($UseInstalledHelper) { $helper = $backup }
 $hostExe = Join-Path $testRoot 'host\WebDesk.exe'
 try {
   @{ restored = $false; client = $originalClient; started = (Get-Date).ToString('o') } | ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $testRoot 'service-restored.json')
   & $helper --install $hostExe
   if ($LASTEXITCODE -ne 0) { throw 'Test service registration failed' }
-  $process = Start-Process -FilePath $hostExe -ArgumentList @('http://127.0.0.1:44300','http://127.0.0.1:44301') -WorkingDirectory (Split-Path $hostExe) -WindowStyle Hidden -PassThru -RedirectStandardError (Join-Path $testRoot 'host-stderr.txt') -RedirectStandardOutput (Join-Path $testRoot 'host-stdout.txt')
+  $hostArguments = @('http://127.0.0.1:44300','http://127.0.0.1:44301')
+  if ($LockScreen) { $hostArguments += 'lock-test' }
+  $process = Start-Process -FilePath $hostExe -ArgumentList $hostArguments -WorkingDirectory (Split-Path $hostExe) -WindowStyle Hidden -PassThru -RedirectStandardError (Join-Path $testRoot 'host-stderr.txt') -RedirectStandardOutput (Join-Path $testRoot 'host-stdout.txt')
+  # Keep the handle open so Windows PowerShell 5 retains the completed exit code.
+  $null = $process.Handle
   if (-not $process.WaitForExit(250000)) { $process.Kill(); throw 'Flutter host timed out' }
   if ($process.ExitCode -ne 0) { throw ('Flutter host exited with ' + $process.ExitCode) }
 } finally {

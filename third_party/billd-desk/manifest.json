@@ -1,6 +1,6 @@
 {
   "revision": "61be620eb35b0004dc66c296f0fdd8c62700b1b9",
-  "policy": "Core blocks are extracted verbatim. WebRTC ICE configuration is the only rewritten block; wrapper code supplies dependencies and deployment interfaces.",
+  "policy": "Source blocks are hashed before deterministic adapters: authenticated ICE, reliable ordered input, and removal of controller/WebRTC console.log calls. Wrapper code supplies dependencies and deployment interfaces.",
   "blocks": [
     {
       "file": "src/utils/index.ts",

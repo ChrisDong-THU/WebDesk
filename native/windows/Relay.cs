@@ -50,13 +50,15 @@ namespace WebDesk.Native {
         // handle as a file stream; verified with consecutive fragmented requests.
         using(var input=new FileStream(new Microsoft.Win32.SafeHandles.SafeFileHandle(GetStdHandle(-10),false),FileAccess.Read,4096,false))
         using(var output=Console.OpenStandardOutput()) {
+          // Forward in bounded chunks instead of retaining a second full frame.
+          var buffer=new byte[65536];
           while(true) {
             byte[] request;try {request=Wire.Read(input);} catch(EndOfStreamException) {break;}
             if(diagnostic) Console.Error.WriteLine("relay request op="+request[0]);
             var writer=new BinaryWriter(worker);writer.Write(request.Length);writer.Write(request);writer.Flush();
             if(diagnostic) Console.Error.WriteLine("relay worker flushed");
-            byte[] response=Response(worker,request[0]==5?160000008:32*1024*1024,out error);Wire.Reply(output,error,response);
-            if(diagnostic) Console.Error.WriteLine("relay reply error="+error+" bytes="+response.Length);
+            int size=Wire.ForwardReply(worker,output,request[0]==5?160000008:32*1024*1024,buffer,out error);
+            if(diagnostic) Console.Error.WriteLine("relay reply error="+error+" bytes="+size);
           }
         }
       }

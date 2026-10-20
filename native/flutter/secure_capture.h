@@ -56,7 +56,9 @@ class WebDeskSecureCapture {
       if(!WriteFile(write_,request,9,&written,nullptr)||written!=9)break;
       uint32_t header[2];if(!Read(header,8)||header[1]>160000008)break;
       bgra_.resize(header[1]);if(!Read(bgra_.data(),bgra_.size()))break;
-      if(header[0]!=0) {healthy_=false;Sleep(100);continue;}
+      // Desktop transitions can briefly reject a capture. Keep the last
+      // successful frame healthy within the bounded freshness window.
+      if(header[0]!=0) {Sleep(100);continue;}
       if(bgra_.size()<8)break;
       int w,h;memcpy(&w,bgra_.data(),4);memcpy(&h,bgra_.data()+4,4);
       if(w<2||h<2||(w&1)||(h&1)||static_cast<int64_t>(w)*h>40000000||bgra_.size()!=8+static_cast<size_t>(w)*h*4)break;
@@ -74,9 +76,10 @@ class WebDeskSecureCapture {
         u[uv]=Clamp(((-38*red-74*green+112*blue+128)>>8)+128);
         v[uv]=Clamp(((112*red-94*green-18*blue+128)>>8)+128);
       }
-      source_->OnCapturedFrame(libwebrtc::RTCVideoFrame::Create(w,h,i420_.data(),static_cast<int>(i420_.size())));
       last_frame_=GetTickCount64();
       healthy_=true;
+      // Publish health before consumers observe the frame callback.
+      source_->OnCapturedFrame(libwebrtc::RTCVideoFrame::Create(w,h,i420_.data(),static_cast<int>(i420_.size())));
       const auto next=started+std::chrono::milliseconds(1000/fps_);
       std::this_thread::sleep_until(next);
     }

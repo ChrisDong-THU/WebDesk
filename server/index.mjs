@@ -1,16 +1,19 @@
 import { createServer } from 'node:http';
-import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { Server } from 'socket.io';
 import { validQuality } from '../shared/protocol.mjs';
 import { registerRemoteSignals } from './billd/signaling.mjs';
+import { clientAddressResolver } from './client-address.mjs';
+import { createPasswordHasher } from './password-hash.mjs';
 
 const root = path.resolve(fileURLToPath(new URL('../dist/', import.meta.url)));
 const { version } = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 const defaultOrigins = [5173, 5174, 4300].flatMap(port => [`http://localhost:${port}`, `http://127.0.0.1:${port}`]);
-export function createSignalingServer({ origins = defaultOrigins, iceServers = [], sessionTimeout = 30000 } = {}) {
+export function createSignalingServer({ origins = defaultOrigins, iceServers = [], sessionTimeout = 30000, trustedProxies = [], passwordHash = createPasswordHasher() } = {}) {
+  const clientAddress = clientAddressResolver(trustedProxies);
   const http = createServer(async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
@@ -56,6 +59,7 @@ export function createSignalingServer({ origins = defaultOrigins, iceServers = [
     }
   }
   io.on('connection', socket => {
+    const address = clientAddress(socket);
     // Original upstream handlers dispatch to an authenticated two-peer room.
     // The adapter retains WebDesk's wire envelope for already-installed clients.
     const upstreamSignals = new Map();
@@ -66,31 +70,49 @@ export function createSignalingServer({ origins = defaultOrigins, iceServers = [
         socket.to(roomId).emit('signal', { sessionId: roomId, msgType, data });
       } }),
     } });
-    socket.on('register-host', (data, ack = () => {}) => {
+    socket.on('register-host', async (data, ack = () => {}) => {
       if (typeof ack !== 'function') return;
-      if (limited(`register:${socket.handshake.address}`, 20)) return ack({ error: '请求过于频繁，请一分钟后重试' });
+      if (socket.data.authenticating) return ack({ error: '认证正在进行，请稍后重试' });
+      if (limited(`register:${address}`, 20)) return ack({ error: '请求过于频繁，请一分钟后重试' });
       if (socket.data.deviceId || socket.data.session || !data || typeof data.deviceId !== 'string' || !/^\d{9}$/.test(data.deviceId) || typeof data.password !== 'string' || data.password.length < 12 || data.password.length > 128) return ack({ error: '无效的设备注册' });
-      if (hosts.has(data.deviceId)) return ack({ error: '设备代码已占用，请重新开启' });
-      const salt = randomBytes(16);
-      hosts.set(data.deviceId, { socketId: socket.id, salt, hash: scryptSync(data.password, salt, 32) });
-      socket.data.deviceId = data.deviceId;
-      ack({ ok: true, iceServers });
+      if (hosts.has(data.deviceId)) return ack({ error: '设备代码已占用，请关闭重复运行的客户端或点击重新生成' });
+      const token = socket.data.authenticating = {};
+      try {
+        const salt = randomBytes(16);
+        const hash = await passwordHash(data.password, salt);
+        if (!socket.connected || socket.data.authenticating !== token) return;
+        if (hosts.has(data.deviceId)) return ack({ error: '设备代码已占用，请关闭重复运行的客户端或点击重新生成' });
+        hosts.set(data.deviceId, { socketId: socket.id, salt, hash });
+        socket.data.deviceId = data.deviceId;
+        ack({ ok: true, iceServers });
+      } catch { if (socket.connected) ack({ error: '认证请求繁忙，请稍后重试' }); }
+      finally { if (socket.data.authenticating === token) socket.data.authenticating = undefined; }
     });
-    socket.on('connect-host', (data, ack = () => {}) => {
+    socket.on('connect-host', async (data, ack = () => {}) => {
       if (typeof ack !== 'function') return;
-      if (limited(`connect:${socket.handshake.address}`)) return ack({ error: '连接尝试过多，请一分钟后重试' });
+      if (socket.data.authenticating) return ack({ error: '认证正在进行，请稍后重试' });
+      if (limited(`connect:${address}`, 60)) return ack({ error: '连接尝试过多，请一分钟后重试' });
       if (socket.data.deviceId || socket.data.session || !data || !validQuality(data.quality) || typeof data.deviceId !== 'string' || typeof data.password !== 'string' || data.password.length > 128) return ack({ error: '连接参数不正确' });
+      if (!/^\d{9}$/.test(data.deviceId)) return ack({ error: '连接参数不正确' });
+      if (limited(`device:${address}:${data.deviceId}`)) return ack({ error: '连接尝试过多，请一分钟后重试' });
       const host = hosts.get(data.deviceId);
-      if (!host || !timingSafeEqual(host.hash, scryptSync(data.password, host.salt, 32))) return ack({ error: '设备离线或连接密码不正确' });
-      const hostSocket = io.sockets.sockets.get(host.socketId);
-      if (!hostSocket || hostSocket.data.session) return ack({ error: '设备正在被控制，请稍后重试' });
-      const sessionId = randomUUID();
-      const session = { host: host.socketId, controller: socket.id, ready: new Set(), timer: setTimeout(() => endSession(sessionId, '连接超时，请检查网络或 TURN 配置'), sessionTimeout) };
-      sessions.set(sessionId, session);
-      socket.data.session = hostSocket.data.session = sessionId;
-      socket.join(sessionId); hostSocket.join(sessionId);
-      ack({ ok: true, sessionId, iceServers });
-      hostSocket.emit('session-start', { sessionId, quality: data.quality, iceServers });
+      if (!host) return ack({ error: '设备离线或连接密码不正确' });
+      const token = socket.data.authenticating = {};
+      try {
+        const hash = await passwordHash(data.password, host.salt);
+        if (!socket.connected || socket.data.authenticating !== token) return;
+        if (hosts.get(data.deviceId) !== host || !timingSafeEqual(host.hash, hash)) return ack({ error: '设备离线或连接密码不正确' });
+        const hostSocket = io.sockets.sockets.get(host.socketId);
+        if (!hostSocket || hostSocket.data.session) return ack({ error: '设备正在被控制，请稍后重试' });
+        const sessionId = randomUUID();
+        const session = { host: host.socketId, controller: socket.id, ready: new Set(), timer: setTimeout(() => endSession(sessionId, '连接超时，请检查网络或 TURN 配置'), sessionTimeout) };
+        sessions.set(sessionId, session);
+        socket.data.session = hostSocket.data.session = sessionId;
+        socket.join(sessionId); hostSocket.join(sessionId);
+        ack({ ok: true, sessionId, iceServers });
+        hostSocket.emit('session-start', { sessionId, quality: data.quality, iceServers });
+      } catch { if (socket.connected) ack({ error: '认证请求繁忙，请稍后重试' }); }
+      finally { if (socket.data.authenticating === token) socket.data.authenticating = undefined; }
     });
     socket.on('signal', data => {
       const session = sessions.get(socket.data.session);
@@ -113,7 +135,10 @@ export function createSignalingServer({ origins = defaultOrigins, iceServers = [
       session.ready.add(socket.id);
       if (session.ready.size === 2) clearTimeout(session.timer);
     });
-    socket.on('end-session', () => endSession(socket.data.session));
+    socket.on('end-session', () => {
+      socket.data.authenticating = undefined;
+      endSession(socket.data.session);
+    });
     socket.on('disconnect', () => {
       endSession(socket.data.session, '对方已离线');
       if (socket.data.deviceId) hosts.delete(socket.data.deviceId);
@@ -124,7 +149,10 @@ export function createSignalingServer({ origins = defaultOrigins, iceServers = [
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const iceServers = JSON.parse(process.env.ICE_SERVERS || '[]');
   if (!Array.isArray(iceServers)) throw Error('ICE_SERVERS must be a JSON array');
-  const server = createSignalingServer({ origins: process.env.ALLOWED_ORIGINS?.split(',').map(s => s.trim()), iceServers });
+  const server = createSignalingServer({
+    origins: process.env.ALLOWED_ORIGINS?.split(',').map(s => s.trim()), iceServers,
+    trustedProxies: (process.env.TRUSTED_PROXIES || '').split(',').map(s => s.trim()).filter(Boolean),
+  });
   const host = process.env.HOST || '127.0.0.1', port = Number(process.env.PORT || 4300);
   server.http.listen(port, host, () => console.log(`WebDesk: http://${host}:${port}`));
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, async () => { await server.close(); process.exit(0); });

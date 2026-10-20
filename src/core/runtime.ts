@@ -15,12 +15,14 @@ import { DesktopTools, type ToolsOptions } from './tools';
 import { HostCapture } from './host-capture';
 import { createKeyboardInput } from './keyboard';
 import { createWheelNormalizer } from './wheel';
+import { bindPointerInput } from './pointer';
 import type { CaptureSource, NativeCommand } from '../../shared/desktop';
 export type { CaptureSource, NativeCommand } from '../../shared/desktop';
 
 export type Quality = { maxBitrate: number; maxFramerate: number; resolutionRatio: number; videoContentHint: string };
 export type Signal = { msgType: string; data: Record<string, any> };
-export type Stats = { fps: number; bitrate: number; rtt: number; width: number; height: number; path: string };
+export type Stats = { fps: number; bitrate: number; rtt: number; width: number; height: number; path: string;
+  codec?: string; mediaDiagnostics?: string };
 type Options = {
   role: 'host' | 'controller'; sessionId: string; iceServers: RTCIceServer[];
   container: HTMLElement; quality: Quality; onSignal: (signal: Signal) => void;
@@ -47,6 +49,7 @@ export class BilldDeskRuntime {
   private ready = false;
   private lastBytes = 0;
   private lastTime = 0;
+  private sampling = false;
   private currentMaxFramerate;
   private currentMaxBitrate;
   private currentResolutionRatio;
@@ -232,16 +235,22 @@ export class BilldDeskRuntime {
         if (!this.ready || this.closed) return;
         if (event instanceof KeyboardEvent && !this.options.container.contains(document.activeElement)) return;
         if (event instanceof MouseEvent && event.target !== this.video) return;
-        if (type === 'mousedown') this.video?.focus();
-        if (event instanceof KeyboardEvent && event.code === 'Escape') { this.releaseInput(); this.video?.blur(); return; }
+        if (event instanceof KeyboardEvent && event.code === 'Escape') { pointer.reset(); this.releaseInput(); this.video?.blur(); return; }
+        pointer.flush();
         callback(event);
       };
       target.addEventListener(type, guarded, { passive: false });
       this.cleanup.push(() => target.removeEventListener(type, guarded));
     };
     const area = this.options.container;
-    bind(area, 'mousedown', page.handleMouseDown); bind(area, 'mousemove', page.handleMouseMove);
-    bind(area, 'mouseup', page.handleMouseUp); bind(area, 'dblclick', page.handleDoublelclick);
+    const pointer = bindPointerInput({
+      area, window, video: () => this.video, active: () => this.ready && !this.closed,
+      down: page.handleMouseDown, move: page.handleMouseMove, up: page.handleMouseUp,
+      cancel: () => this.releaseInput(),
+      congested: () => (this.dataChannel?.bufferedAmount ?? 0) > 16 * 1024,
+    });
+    this.cleanup.push(pointer.dispose);
+    bind(area, 'dblclick', page.handleDoublelclick);
     bind(area, 'contextmenu', page.handleContextmenu);
     bind(area, 'wheel', (event: WheelEvent) => {
       event.preventDefault();
@@ -255,7 +264,7 @@ export class BilldDeskRuntime {
     }));
     bind(window, 'keydown', this.keyboard.down);
     bind(window, 'keyup', this.keyboard.up);
-    const release = () => { wheel.reset(); this.releaseInput(); };
+    const release = () => { pointer.reset(); wheel.reset(); this.releaseInput(); };
     area.addEventListener('focusout', release);
     window.addEventListener('blur', release);
     this.cleanup.push(() => { area.removeEventListener('focusout', release); window.removeEventListener('blur', release); });
@@ -263,14 +272,17 @@ export class BilldDeskRuntime {
   }
   private async collectStats() {
     const pc = this.peerConnection;
-    if (!pc || this.closed || !this.options.onStats) return;
+    if (!pc || this.closed || this.sampling || !this.options.onStats) return;
+    this.sampling = true;
+    try {
     const reports = await pc.getStats();
-    const stats: Stats = { fps: 0, bitrate: 0, rtt: 0, width: 0, height: 0, path: '协商中' };
+    const stats: Stats = { fps: 0, bitrate: 0, rtt: 0, width: 0, height: 0, path: '协商中', codec: '', mediaDiagnostics: '' };
     reports.forEach(report => {
       if (report.type === 'inbound-rtp' && report.kind === 'video') {
         stats.fps = report.framesPerSecond || 0;
         stats.width = report.frameWidth || 0; stats.height = report.frameHeight || 0;
-        if (this.lastTime) stats.bitrate = Math.max(0, (report.bytesReceived - this.lastBytes) * 8 / (report.timestamp - this.lastTime));
+        stats.codec = reports.get(report.codecId)?.mimeType?.replace('video/', '') ?? '';
+        if (this.lastTime && report.timestamp > this.lastTime) stats.bitrate = Math.max(0, (report.bytesReceived - this.lastBytes) * 8 / (report.timestamp - this.lastTime));
         this.lastBytes = report.bytesReceived; this.lastTime = report.timestamp;
       }
       if (report.type === 'transport' && report.selectedCandidatePairId) {
@@ -281,7 +293,15 @@ export class BilldDeskRuntime {
         stats.path = local?.candidateType === 'relay' || remote?.candidateType === 'relay' ? 'TURN 中继' : 'P2P 直连';
       }
     });
-    this.options.onStats(stats);
+    if (this.tools?.channel.readyState === 'open' && this.options.role === 'controller') {
+      try {
+        const media = await this.tools.request('media.stats', {}, 2500);
+        const encode = typeof media.encodeMs === 'number' ? `${media.encodeMs.toFixed(1)} ms/帧` : '未报告';
+        stats.mediaDiagnostics = `编码器：${media.encoder || '未报告'}；编码耗时：${encode}；质量限制：${media.qualityLimit || '未报告'}；采集：${media.capture === 'secure' ? '安全桌面' : '普通桌面'}`;
+      } catch { stats.mediaDiagnostics = '暂时无法获取远程媒体统计'; }
+    }
+    if (!this.closed) this.options.onStats(stats);
+    } finally { this.sampling = false; }
   }
   close() {
     if (this.closed) return;

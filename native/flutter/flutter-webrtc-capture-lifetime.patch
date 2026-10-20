@@ -1,0 +1,297 @@
+diff --git a/common/cpp/include/flutter_screen_capture.h b/common/cpp/include/flutter_screen_capture.h
+index 30052a8..1d7d44f 100644
+--- a/common/cpp/include/flutter_screen_capture.h
++++ b/common/cpp/include/flutter_screen_capture.h
+@@ -21,8 +21,7 @@
+ 
+ namespace flutter_webrtc_plugin {
+ 
+-class FlutterScreenCapture : public MediaListObserver,
+-                             public DesktopCapturerObserver {
++class FlutterScreenCapture : public MediaListObserver {
+  public:
+   FlutterScreenCapture(FlutterWebRTCBase* base);
+   virtual ~FlutterScreenCapture();
+@@ -51,14 +50,6 @@ class FlutterScreenCapture : public MediaListObserver,
+   void OnMediaSourceThumbnailChanged(
+       scoped_refptr<MediaSource> source) override;
+ 
+-  void OnStart(scoped_refptr<RTCDesktopCapturer> capturer) override;
+-
+-  void OnPaused(scoped_refptr<RTCDesktopCapturer> capturer) override;
+-
+-  void OnStop(scoped_refptr<RTCDesktopCapturer> capturer) override;
+-
+-  void OnError(scoped_refptr<RTCDesktopCapturer> capturer) override;
+-
+  private:
+   class ObserverProxy;
+ 
+@@ -72,6 +63,7 @@ class FlutterScreenCapture : public MediaListObserver,
+   void PostToWorker(std::function<void()> task);
+   void WorkerLoop();
+   void StopWorker();
++  void ReapCapturers();
+ 
+   // Answers a method call on the platform thread. The Windows plugin hands
+   // over results without a task runner, so a result must not be completed
+@@ -84,7 +76,7 @@ class FlutterScreenCapture : public MediaListObserver,
+   // Set when teardown starts. Worker tasks no longer reply after that.
+   std::atomic<bool> closing_{false};
+ 
+-  // What libwebrtc holds as the media list and capturer observer, in place of
++  // What libwebrtc holds as the media list observer, in place of
+   // `this`. libwebrtc keeps raw observer pointers and may call them after
+   // this object is gone, so the proxy is never freed. See ObserverProxy.
+   ObserverProxy* observer_proxy_;
+@@ -126,10 +118,12 @@ class FlutterScreenCapture : public MediaListObserver,
+   // Loopback audio capturer active during a screen-share session.
+   // Null when not capturing or on platforms without loopback support.
+   std::unique_ptr<LoopbackCapturer> loopback_capturer_;
++  std::mutex loopback_mutex_;
++  RTCDesktopCapturer* loopback_desktop_capturer_ = nullptr;
+   // The custom audio source fed by the loopback capturer.
+   scoped_refptr<RTCAudioSource> loopback_audio_source_;
+ };
+ 
+ }  // namespace flutter_webrtc_plugin
+ 
+-#endif  // FLUTTER_SCRREN_CAPTURE_HXX
+\ No newline at end of file
++#endif  // FLUTTER_SCRREN_CAPTURE_HXX
+diff --git a/common/cpp/src/flutter_screen_capture.cc b/common/cpp/src/flutter_screen_capture.cc
+index 8fc0204..f483a58 100644
+--- a/common/cpp/src/flutter_screen_capture.cc
++++ b/common/cpp/src/flutter_screen_capture.cc
+@@ -15,38 +15,15 @@
+ 
+ namespace flutter_webrtc_plugin {
+ 
+-namespace {
+-
+-// Waits, for a bounded time, until `capturer` holds the only reference left,
+-// so that the capturer is destroyed on the calling thread when this returns
+-// rather than on whichever thread happens to let go of it last. Callers move
+-// their reference in, so that `capturer` is the caller's only one.
+-void ReleaseOnCurrentThread(scoped_refptr<RTCDesktopCapturer> capturer) {
+-  const auto deadline =
+-      std::chrono::steady_clock::now() + std::chrono::seconds(2);
+-  while (std::chrono::steady_clock::now() < deadline) {
+-    // AddRef returns the new count, so 2 means `capturer` is the only owner.
+-    const int count = capturer->AddRef();
+-    capturer->Release();
+-    if (count <= 2) {
+-      break;
+-    }
+-    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+-  }
+-}
+-
+-}  // namespace
+-
+-// libwebrtc keeps raw pointers to its media list and capturer observers. It
++// libwebrtc keeps raw pointers to its media list observers. It
+ // checks them on one thread and calls them on the signaling thread, without
+ // synchronization, and it can still call them while the plugin is torn down
+-// (for example, a thumbnail finishing, or a capturer stopping when the
+-// factory is released). Clearing the pointer with DeRegister...Observer() is
++// (for example, a thumbnail finishing). Clearing the pointer with
++// DeRegister...Observer() is
+ // not safe for the same reason. So libwebrtc is given this proxy instead of
+ // the FlutterScreenCapture itself. Detach() turns every later call into a
+ // no-op, and the proxy is intentionally never freed.
+-class FlutterScreenCapture::ObserverProxy : public MediaListObserver,
+-                                            public DesktopCapturerObserver {
++class FlutterScreenCapture::ObserverProxy : public MediaListObserver {
+  public:
+   explicit ObserverProxy(FlutterScreenCapture* target) : target_(target) {}
+ 
+@@ -85,34 +62,6 @@ class FlutterScreenCapture::ObserverProxy : public MediaListObserver,
+     }
+   }
+ 
+-  void OnStart(scoped_refptr<RTCDesktopCapturer> capturer) override {
+-    std::lock_guard<std::mutex> lock(mutex_);
+-    if (target_) {
+-      target_->OnStart(capturer);
+-    }
+-  }
+-
+-  void OnPaused(scoped_refptr<RTCDesktopCapturer> capturer) override {
+-    std::lock_guard<std::mutex> lock(mutex_);
+-    if (target_) {
+-      target_->OnPaused(capturer);
+-    }
+-  }
+-
+-  void OnStop(scoped_refptr<RTCDesktopCapturer> capturer) override {
+-    std::lock_guard<std::mutex> lock(mutex_);
+-    if (target_) {
+-      target_->OnStop(capturer);
+-    }
+-  }
+-
+-  void OnError(scoped_refptr<RTCDesktopCapturer> capturer) override {
+-    std::lock_guard<std::mutex> lock(mutex_);
+-    if (target_) {
+-      target_->OnError(capturer);
+-    }
+-  }
+-
+  private:
+   std::mutex mutex_;
+   FlutterScreenCapture* target_;
+@@ -131,9 +80,8 @@ FlutterScreenCapture::~FlutterScreenCapture() {
+   // From here on libwebrtc callbacks no longer reach this object.
+   observer_proxy_->Detach();
+ 
+-  // Stop the capturers that are still running, so that their capture loops
+-  // end now. They are destroyed later, when the factory is released, and
+-  // that joins each capture thread.
++  // Stop remaining loops without status callbacks. Release our references on
++  // the worker, since joining a capture thread can send window messages.
+   std::vector<scoped_refptr<RTCDesktopCapturer>> capturers;
+   {
+     std::lock_guard<std::mutex> lock(capturers_mutex_);
+@@ -142,6 +90,7 @@ FlutterScreenCapture::~FlutterScreenCapture() {
+   for (auto& capturer : capturers) {
+     capturer->Stop();
+   }
++  PostToWorker([capturers = std::move(capturers)] {});
+ 
+   StopWorker();
+ }
+@@ -184,15 +133,18 @@ void FlutterScreenCapture::WorkerLoop() {
+     std::function<void()> task;
+     {
+       std::unique_lock<std::mutex> lock(worker_mutex_);
+-      worker_cv_.wait(
+-          lock, [this] { return worker_stopping_ || !worker_tasks_.empty(); });
++      worker_cv_.wait_for(lock, std::chrono::milliseconds(20),
++          [this] { return worker_stopping_ || !worker_tasks_.empty(); });
+       if (worker_stopping_) {
+         break;
+       }
+-      task = std::move(worker_tasks_.front());
+-      worker_tasks_.pop_front();
++      if (!worker_tasks_.empty()) {
++        task = std::move(worker_tasks_.front());
++        worker_tasks_.pop_front();
++      }
+     }
+-    task();
++    if (task) task();
++    ReapCapturers();
+   }
+   // Drop the tasks still queued on this thread rather than the destructor's.
+   // A queued task may hold the last reference to a stopped capturer, and
+@@ -206,6 +158,37 @@ void FlutterScreenCapture::WorkerLoop() {
+   worker_exited_ = true;
+ }
+ 
++void FlutterScreenCapture::ReapCapturers() {
++  std::vector<scoped_refptr<RTCDesktopCapturer>> retired;
++  {
++    std::lock_guard<std::mutex> lock(capturers_mutex_);
++    for (auto it = active_capturers_.begin(); it != active_capturers_.end();) {
++      const int count = (*it)->AddRef();
++      (*it)->Release();
++      // No observer is ever registered. Once the track source releases its
++      // reference, only this collection owns the capturer: no queued status
++      // callback can resurrect it while its destructor joins the capture thread.
++      if (count == 2) {
++        retired.push_back(std::move(*it));
++        it = active_capturers_.erase(it);
++      } else {
++        ++it;
++      }
++    }
++  }
++  for (auto& capturer : retired) {
++    capturer->Stop();
++    std::lock_guard<std::mutex> lock(loopback_mutex_);
++    if (loopback_capturer_ && loopback_desktop_capturer_ == capturer.get()) {
++      loopback_capturer_->Stop();
++      loopback_capturer_.reset();
++      loopback_audio_source_ = nullptr;
++      loopback_desktop_capturer_ = nullptr;
++    }
++  }
++  // Joining the capture thread must happen here, outside all collection locks.
++}
++
+ void FlutterScreenCapture::PostResult(std::function<void()> reply) {
+   if (closing_) {
+     return;
+@@ -385,44 +368,6 @@ void FlutterScreenCapture::OnMediaSourceThumbnailChanged(
+   base_->event_channel()->Success(EncodableValue(info));
+ }
+ 
+-void FlutterScreenCapture::OnStart(scoped_refptr<RTCDesktopCapturer> capturer) {
+-}
+-
+-void FlutterScreenCapture::OnPaused(
+-    scoped_refptr<RTCDesktopCapturer> capturer) {}
+-
+-void FlutterScreenCapture::OnStop(scoped_refptr<RTCDesktopCapturer> capturer) {
+-  if (loopback_capturer_) {
+-    loopback_capturer_->Stop();
+-    loopback_capturer_.reset();
+-    loopback_audio_source_ = nullptr;
+-  }
+-
+-  // The capturer is stopping, typically from its track source's destructor,
+-  // which is about to drop its own reference. Hand ours to the worker thread
+-  // so the final release, which joins the capturer's thread, happens there.
+-  scoped_refptr<RTCDesktopCapturer> retired;
+-  {
+-    std::lock_guard<std::mutex> lock(capturers_mutex_);
+-    for (auto it = active_capturers_.begin(); it != active_capturers_.end();
+-         ++it) {
+-      if (it->get() == capturer.get()) {
+-        retired = *it;
+-        active_capturers_.erase(it);
+-        break;
+-      }
+-    }
+-  }
+-  if (retired.get()) {
+-    PostToWorker([retired]() mutable {
+-      ReleaseOnCurrentThread(std::move(retired));
+-    });
+-  }
+-}
+-
+-void FlutterScreenCapture::OnError(scoped_refptr<RTCDesktopCapturer> capturer) {
+-}
+-
+ void FlutterScreenCapture::GetDesktopSourceThumbnail(
+     std::string source_id,
+     int width,
+@@ -512,6 +457,10 @@ void FlutterScreenCapture::GetDisplayMedia(
+   }
+ 
+   if (capture_audio) {
++    std::lock_guard<std::mutex> lock(loopback_mutex_);
++    // The previous desktop may be retired while the new stream is built.
++    // Do not let its retirement stop this replacement audio session.
++    loopback_desktop_capturer_ = nullptr;
+     // Stop any previous loopback session before starting a new one.
+     if (loopback_capturer_) {
+       loopback_capturer_->Stop();
+@@ -613,7 +562,14 @@ void FlutterScreenCapture::GetDisplayMedia(
+     return;
+   }
+ 
+-  desktop_capturer->RegisterDesktopCapturerObserver(observer_proxy_);
++  // libwebrtc m150 dispatches status callbacks with a raw `this`, then builds
++  // a scoped_refptr on the signaling thread. During lock/unlock that can call
++  // pure virtual AddRef after destruction has started. These notifications
++  // aren't used by Flutter; keep observer_ null for the entire lifetime.
++  if (capture_audio) {
++    std::lock_guard<std::mutex> lock(loopback_mutex_);
++    loopback_desktop_capturer_ = desktop_capturer.get();
++  }
+   {
+     std::lock_guard<std::mutex> lock(capturers_mutex_);
+     active_capturers_.push_back(desktop_capturer);

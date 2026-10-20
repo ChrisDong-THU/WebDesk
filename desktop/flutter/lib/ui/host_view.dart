@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -39,12 +40,14 @@ class HostView extends StatefulWidget {
     required this.error,
     required this.onToggle,
     required this.onCopy,
+    required this.onRegenerate,
   });
   final TextEditingController address;
   final bool enabled, busy, connected, connectingBrowser;
   final String device, password, error;
   final VoidCallback onToggle;
   final Future<void> Function() onCopy;
+  final VoidCallback onRegenerate;
 
   @override
   State<HostView> createState() => _HostViewState();
@@ -291,6 +294,17 @@ class _HostViewState extends State<HostView> {
                                               widget.busy && !widget.enabled
                                               ? null
                                               : widget.onToggle,
+                                        ),
+                                        const SizedBox(width: 16),
+                                        _RoundAction(
+                                          label: '重新生成设备代码和密码',
+                                          icon: 'refresh',
+                                          foreground: accent,
+                                          fill: const Color(0x0ab2ecd7),
+                                          border: const Color(0x1cb2ecd7),
+                                          onPressed: widget.busy
+                                              ? null
+                                              : widget.onRegenerate,
                                         ),
                                       ],
                                     ),
@@ -604,6 +618,8 @@ class _LineIcon extends StatelessWidget {
     'power': 'M12 2v10M6.5 5a9 9 0 1 0 11 0',
     'copy': 'M9 9h11v11H9V9ZM5 15H3V3h12v2',
     'check': 'm5 12 4 4L19 6',
+    'refresh':
+        'M20 7v5h-5M4 17v-5h5M6.1 6.1A8 8 0 0 1 20 12M4 12a8 8 0 0 0 13.9 5.9',
     'eye':
         'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Zm13 0a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z',
     'eyeOff':

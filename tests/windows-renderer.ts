@@ -80,6 +80,12 @@ async function run() {
     await wait(() => !!controller!.video?.videoWidth && ready, 'Video/control did not connect', forceRelay ? 40000 : 15000);
     hostSocket.emit('session-ready', { sessionId: joined.sessionId }); controllerSocket.emit('session-ready', { sessionId: joined.sessionId });
     const video = controller.video!;
+    for (const peer of [host, controller]) {
+      const channel = peer.dataChannel!;
+      if (!channel.ordered || channel.maxRetransmits !== null || channel.maxPacketLifeTime !== null) {
+        throw Error('Control messages require reliable, ordered delivery');
+      }
+    }
     const track = host.anchorStream.value!.getVideoTracks()[0];
     const nativeCapture = track.getSettings();
     const originalPC = host.peerConnection, originalTrack = track.id;
@@ -89,6 +95,13 @@ async function run() {
     video.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 }));
     video.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, clientX: rect.left + 20, clientY: rect.top + 20 }));
     video.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0, clientX: rect.left + 20, clientY: rect.top + 20 }));
+    await wait(() => commands.some(item => item.channel === 'mouseReleaseButtonLeft'), 'Initial mouse release missing');
+    const dragStart = commands.length;
+    video.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, buttons: 1, clientX: rect.left + 20, clientY: rect.top + 20 }));
+    document.body.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0, clientX: rect.right + 50, clientY: rect.bottom + 50 }));
+    await wait(() => commands.slice(dragStart).some(item => item.channel === 'mouseReleaseButtonLeft'), 'Release outside video missing');
+    const dragCommands = commands.slice(dragStart).filter(item => ['mousePressButtonLeft', 'mouseReleaseButtonLeft'].includes(item.channel));
+    if (dragCommands.map(item => item.channel).join(',') !== 'mousePressButtonLeft,mouseReleaseButtonLeft') throw Error('Mouse state delivered out of order');
     video.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 100 }));
     video.focus();
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyA', key: 'a' }));

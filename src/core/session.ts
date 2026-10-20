@@ -18,7 +18,7 @@ export function useSession(video: () => HTMLElement | undefined) {
   const transfer = ref('');
   const audioEnabled = ref(false), audioBusy = ref(false);
   let audio: RemoteAudio | undefined;
-  const stats = reactive({ fps: 0, bitrate: 0, rtt: 0, width: 0, height: 0, path: '协商中' });
+  const stats = reactive({ fps: 0, bitrate: 0, rtt: 0, width: 0, height: 0, path: '协商中', codec: '', mediaDiagnostics: '' });
   let socket: Socket | undefined, peer: BilldDeskRuntime | undefined;
   let generation = 0;
   let pending: Signal[] = [];

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -38,6 +39,7 @@ void main() {
     Size size = const Size(860, 620),
     VoidCallback? toggle,
     Future<void> Function()? copy,
+    VoidCallback? regenerate,
     TextEditingController? address,
   }) async {
     tester.view.devicePixelRatio = 1;
@@ -64,6 +66,7 @@ void main() {
             error: error,
             onToggle: toggle ?? () {},
             onCopy: copy ?? () async {},
+            onRegenerate: regenerate ?? () {},
           ),
         ),
       ),
@@ -85,30 +88,26 @@ void main() {
     });
   }
 
-  testWidgets(
-    'disabled layout has one icon action and floats the address label on focus',
-    (tester) async {
-      final address = TextEditingController();
-      addTearDown(address.dispose);
-      var toggles = 0;
-      await show(tester, address: address, toggle: () => toggles++);
-      expect(find.text('未开启'), findsOneWidget);
-      expect(find.text('Windows 被控端'), findsNothing);
-      expect(find.text('开启远程控制'), findsNothing);
-      final before = tester.getTopLeft(find.text('服务地址')).dy;
-      await tester.tap(find.byType(TextField));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
-      expect(tester.getTopLeft(find.text('服务地址')).dy, lessThan(before));
-      await tester.enterText(find.byType(TextField), 'http://127.0.0.1:4300');
-      await tester.tap(find.byTooltip('开启远程控制'));
-      expect(toggles, 1);
-      expect(
-        tester.getSize(find.byKey(const ValueKey('host-card'))).width,
-        380,
-      );
-    },
-  );
+  testWidgets('disabled layout floats the address label on focus', (
+    tester,
+  ) async {
+    final address = TextEditingController();
+    addTearDown(address.dispose);
+    var toggles = 0;
+    await show(tester, address: address, toggle: () => toggles++);
+    expect(find.text('未开启'), findsOneWidget);
+    expect(find.text('Windows 被控端'), findsNothing);
+    expect(find.text('开启远程控制'), findsNothing);
+    final before = tester.getTopLeft(find.text('服务地址')).dy;
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(tester.getTopLeft(find.text('服务地址')).dy, lessThan(before));
+    await tester.enterText(find.byType(TextField), 'http://127.0.0.1:4300');
+    await tester.tap(find.byTooltip('开启远程控制'));
+    expect(toggles, 1);
+    expect(tester.getSize(find.byKey(const ValueKey('host-card'))).width, 380);
+  });
 
   testWidgets(
     'browser status reflects media connection, not just host enablement',
@@ -130,46 +129,60 @@ void main() {
     },
   );
 
-  testWidgets(
-    'copy and stop are separate actions; password visibility resets when disabled',
-    (tester) async {
-      var copies = 0, stops = 0;
-      await show(
-        tester,
-        enabled: true,
-        copy: () async {
-          copies++;
-        },
-        toggle: () => stops++,
-      );
-      final password = find.descendant(
-        of: find.byKey(const ValueKey('password-field')),
-        matching: find.byType(EditableText),
-      );
-      expect(tester.widget<EditableText>(password).obscureText, isTrue);
-      await tester.tap(find.byTooltip('显示密码'));
-      await tester.pump();
-      expect(tester.widget<EditableText>(password).obscureText, isFalse);
-      await tester.tap(find.byTooltip('复制连接信息'));
-      await tester.pump();
-      expect(copies, 1);
-      expect(find.byTooltip('已复制'), findsOneWidget);
-      await tester.tap(find.byTooltip('停止远程控制'));
-      expect(stops, 1);
-      await show(tester);
-      await show(tester, enabled: true);
-      expect(tester.widget<EditableText>(password).obscureText, isTrue);
-      await tester.pumpWidget(const SizedBox());
-    },
-  );
+  testWidgets('copy, stop and regenerate are separate actions in order', (
+    tester,
+  ) async {
+    var copies = 0, stops = 0, regenerations = 0;
+    await show(
+      tester,
+      enabled: true,
+      copy: () async {
+        copies++;
+      },
+      toggle: () => stops++,
+      regenerate: () => regenerations++,
+    );
+    final password = find.descendant(
+      of: find.byKey(const ValueKey('password-field')),
+      matching: find.byType(EditableText),
+    );
+    expect(tester.widget<EditableText>(password).obscureText, isTrue);
+    await tester.tap(find.byTooltip('显示密码'));
+    await tester.pump();
+    expect(tester.widget<EditableText>(password).obscureText, isFalse);
+    await tester.tap(find.byTooltip('复制连接信息'));
+    await tester.pump();
+    expect(copies, 1);
+    expect(find.byTooltip('已复制'), findsOneWidget);
+    await tester.tap(find.byTooltip('停止远程控制'));
+    expect(stops, 1);
+    expect(
+      tester.getCenter(find.byTooltip('重新生成设备代码和密码')).dx,
+      greaterThan(tester.getCenter(find.byTooltip('停止远程控制')).dx),
+    );
+    await tester.tap(find.byTooltip('重新生成设备代码和密码'));
+    expect(regenerations, 1);
+    await show(tester);
+    await show(tester, enabled: true);
+    expect(tester.widget<EditableText>(password).obscureText, isTrue);
+    await tester.pumpWidget(const SizedBox());
+  });
 
   testWidgets(
     'busy disables repeated start; errors fit and scroll at minimum window size',
     (tester) async {
       var toggles = 0;
-      await show(tester, busy: true, toggle: () => toggles++);
+      var regenerations = 0;
+      await show(
+        tester,
+        busy: true,
+        toggle: () => toggles++,
+        regenerate: () => regenerations++,
+      );
       await tester.tap(find.byTooltip('开启中'));
       expect(toggles, 0);
+      await tester.tap(find.byTooltip('重新生成设备代码和密码'));
+      expect(regenerations, 0);
       expect(find.text('连接服务中'), findsOneWidget);
       await show(
         tester,

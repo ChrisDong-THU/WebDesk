@@ -5,18 +5,60 @@ on:
     paths:
       - 'desktop/**'
       - 'native/**'
+      - 'third_party/tray_manager/**'
       - 'build/**'
       - 'scripts/build-flutter.ps1'
+      - 'scripts/build-libwebrtc.ps1'
       - 'scripts/prepare-flutter.ps1'
+      - 'scripts/test-flutter-task-runner.ps1'
+      - 'scripts/test-tray.ps1'
+      - 'tests/tray-menu.cpp'
+      - 'tests/task-runner-regression.cpp'
+      - 'tests/remote-caption-buttons.cpp'
+      - 'tests/flutter-window-probe.cpp'
       - 'scripts/setup-inno.ps1'
       - '.github/workflows/windows.yml'
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'desktop/**'
+      - 'native/**'
+      - 'third_party/tray_manager/**'
+      - 'shared/**'
+      - 'server/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'package*.json'
+      - '.github/workflows/windows.yml'
 permissions:
   contents: read
 jobs:
-  installer:
+  flutter-tests:
+    if: github.event_name == 'pull_request'
     runs-on: windows-2022
-    timeout-minutes: 60
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: ./scripts/prepare-flutter.ps1 -SkipAudioBuild
+      - run: ./scripts/test-flutter-task-runner.ps1
+      - run: ./scripts/test-tray.ps1
+      - run: ../../.tools/flutter/bin/flutter.bat analyze --no-pub
+        working-directory: desktop/flutter
+      - run: ../../.tools/flutter/bin/flutter.bat test --no-pub
+        working-directory: desktop/flutter
+  installer:
+    if: github.event_name != 'pull_request'
+    runs-on: windows-2022
+    timeout-minutes: 180
     defaults:
       run:
         # Match npm's Windows PowerShell build scripts and module search path.
@@ -28,8 +70,20 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      # Only the immutable native artifact is cached, not the huge source tree.
+      # build-libwebrtc.ps1 still verifies recipe and both binary hashes.
+      - uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: .tools/webrtc-build/external-audio
+          key: webrtc-win-x64-${{ hashFiles('native/flutter/dependencies.json', 'native/flutter/libwebrtc-external-audio.patch', 'scripts/build-libwebrtc.ps1') }}
       - run: ./scripts/setup-inno.ps1
       - run: npm run build:inno
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-media-${{ hashFiles('native/flutter/dependencies.json', 'native/flutter/libwebrtc-external-audio.patch', 'scripts/build-libwebrtc.ps1') }}
+          path: .tools/webrtc-build/external-audio/*
+          include-hidden-files: true
+          if-no-files-found: error
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: windows-installer

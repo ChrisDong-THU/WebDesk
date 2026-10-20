@@ -8,7 +8,7 @@ import appIcon from './assets/webdesk-icon.svg';
 const video = ref<HTMLElement>();
 const viewport = ref<HTMLElement>();
 const session = useSession(() => video.value);
-const { isHost, serverUrl, deviceId, password, enabled, busy, connected, error, status, stats, inSession } = session;
+const { isHost, serverUrl, deviceId, password, enabled, busy, connected, error, status, stats, inSession, audioEnabled, audioBusy } = session;
 const showPassword = ref(false), copied = ref(false);
 const deviceLabel = computed(() => deviceId.value.replace(/(\d{3})(?=\d)/g, '$1 '));
 const remoteVisible = computed(() => !isHost && inSession.value);
@@ -118,11 +118,19 @@ watch(remoteVisible, visible => {
 
     <section v-show="remoteVisible" class="remote-stage" aria-label="远程桌面">
       <RemoteTools :session="session">
-        <div class="remote-actions">
-          <button class="toolbar-button icon-only" @click="fullscreen" title="全屏" aria-label="全屏">
+        <div class="remote-actions" role="group" aria-label="连接操作">
+          <button class="toolbar-button remote-action audio-toggle" :class="{ active: audioEnabled }"
+            role="switch" aria-label="远程电脑声音" :aria-checked="audioEnabled"
+            :disabled="!connected || audioBusy" :aria-busy="audioBusy"
+            :title="audioEnabled ? '关闭远程电脑声音' : '开启远程电脑声音'"
+            @click="session.toggleAudio()">
+            <Icon :name="audioEnabled ? 'volume' : 'volumeOff'" />
+          </button>
+          <button class="toolbar-button remote-action" @click="fullscreen" title="全屏" aria-label="全屏">
             <Icon name="expand" />
           </button>
-          <button class="disconnect-button" @click="session.end()"><Icon name="power" />断开</button>
+          <button class="toolbar-button remote-action disconnect-button" @click="session.end()"
+            title="断开连接" aria-label="断开连接"><Icon name="power" /></button>
         </div>
       </RemoteTools>
       <div ref="viewport" class="video-area">
@@ -132,6 +140,7 @@ watch(remoteVisible, visible => {
       <footer class="remote-footer">
         <span>{{ stats.path }}</span><span>{{ stats.width }} × {{ stats.height }}</span>
         <span>{{ stats.fps.toFixed(0) }} FPS</span><span>{{ (stats.bitrate / 1000).toFixed(2) }} Mbps</span>
+        <span v-if="stats.codec" :title="stats.mediaDiagnostics">{{ stats.codec }}</span>
         <span>{{ stats.rtt.toFixed(0) }} ms</span><span class="keyboard-tip"><kbd>Esc</kbd> 释放键盘</span>
       </footer>
       <div v-if="error" class="error-box" role="alert">{{ error }}</div>

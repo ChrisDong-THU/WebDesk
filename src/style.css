@@ -160,12 +160,11 @@ kbd { font-family: inherit; font-size: 10px; padding: 3px 5px; border: 1px solid
 .remote-stage { height: 100dvh; display: flex; flex-direction: column; background: #0a0e0c; }
 .video-area:fullscreen { width: 100vw; height: 100dvh; background: #000; }
 .video-area:fullscreen video:focus { box-shadow: none; }
-.remote-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.remote-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .toolbar-button, .disconnect-button { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 34px; padding: 0 11px; border-radius: 7px; font-size: 11px; background: #27352d; color: #b8c9be; }
 .toolbar-button svg, .disconnect-button svg { width: 15px; height: 15px; }
 .toolbar-button:hover { background: #35483b; }
 .toolbar-button.active { color: var(--accent); background: #b2ecd715; }
-.icon-only { width: 34px; padding: 8px; }
 .disconnect-button { background: #d7928315; color: #dda89a; }
 .disconnect-button:hover { background: #d7928325; }
 .video-area { position: relative; display: flex; align-items: center; justify-content: center; flex: 1; min-height: 0; background: #070b08; }
@@ -182,11 +181,6 @@ kbd { font-family: inherit; font-size: 10px; padding: 3px 5px; border: 1px solid
 .remote-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; min-height: 60px; padding: 10px 18px; background: #161a1e; border-bottom: 1px solid #ffffff0d; box-shadow: 0 1px 0 #0003; }
 .remote-tools-shell input[hidden] { display: none; }
 .tool-settings, .tool-triggers { display: flex; align-items: center; gap: 8px; }
-.audio-toggle { white-space: nowrap; }
-.switch-track { width: 26px; height: 16px; padding: 3px; border-radius: 12px; background: #48515a; transition: background .18s; }
-.switch-track > span { display: block; width: 10px; height: 10px; border-radius: 50%; background: #e3e7ec; transition: transform .18s; }
-.switch-track.on { background: var(--accent); }
-.switch-track.on > span { transform: translateX(10px); background: #19362b; }
 .tool-setting { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 11px; color: #929ba5; }
 .quality-select { position: relative; }
 .quality-select-trigger { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-width: 76px; height: 34px; padding: 0 10px; border: 1px solid #ffffff10; border-radius: 7px; background: #20252b; color: #e3e7ec; font-size: 12px; font-variant-numeric: tabular-nums; transition: border-color .15s, background .15s; }
@@ -204,15 +198,21 @@ kbd { font-family: inherit; font-size: 10px; padding: 3px 5px; border: 1px solid
 .quality-option svg { width: 14px; height: 14px; }
 .tool-divider { height: 20px; width: 1px; background: #ffffff12; margin: 0 3px; }
 .remote-tools .toolbar-button { min-height: 34px; font-size: 12px; background: transparent; color: #a7b1bb; border: 1px solid transparent; transition: color .15s, background .15s, border-color .15s; }
-.remote-tools .toolbar-button:hover { color: #eff3f7; background: #ffffff07; }
+.remote-tools .toolbar-button:hover:not(:disabled) { color: #eff3f7; background: #ffffff07; }
 .remote-tools .toolbar-button.active { color: #d3f4e6; background: #b2ecd70d; border-color: #b2ecd722; }
 .tool-trigger { position: relative; border-radius: 7px; }
 .tool-trigger > svg:first-child { color: #929eaa; }
 .tool-trigger.active > svg:first-child { color: #b2ecd7; }
 .tool-trigger .tool-chevron { width: 10px; height: 10px; margin-left: 2px; transform: rotate(90deg); transition: transform .16s; color: #71808b; }
 .tool-trigger.active .tool-chevron { transform: rotate(-90deg); color: #a7d8c5; }
-.remote-tools .disconnect-button { min-height: 34px; border: 1px solid #edb3a414; background: #d7928308; color: #cc9c91; }
-.remote-tools .disconnect-button:hover { background: #d7928318; }
+.remote-tools .remote-action { flex: 0 0 34px; width: 34px; height: 34px; padding: 0; border-radius: 7px; border-color: #ffffff10; background: #20252b; color: #a7b1bb; }
+.remote-action svg { width: 17px; height: 17px; }
+.remote-tools .remote-action:hover:not(:disabled) { border-color: #ffffff28; background: #2a3139; color: #eff3f7; }
+.remote-tools .audio-toggle.active { border-color: #b2ecd733; background: #b2ecd714; color: #b2ecd7; }
+.remote-tools .audio-toggle.active:hover:not(:disabled) { border-color: #b2ecd755; background: #b2ecd723; color: #d3f4e6; }
+.remote-tools .disconnect-button { color: #d9a397; }
+.remote-tools .disconnect-button:hover:not(:disabled) { border-color: #edb3a438; background: #d792831c; color: #f2b9ac; }
+.remote-action:focus-visible { outline-offset: 3px; }
 .tool-drawer { position: absolute; z-index: 1; visibility: hidden; opacity: 0; pointer-events: none; transform: translateY(-5px) scale(.98); transform-origin: var(--tool-origin) top; transition: opacity .16s ease, transform .18s cubic-bezier(.2,.8,.2,1), visibility 0s .18s; border-radius: 12px; box-shadow: 0 16px 48px #0005, 0 4px 12px #0003; }
 .tool-drawer.open { visibility: visible; opacity: 1; pointer-events: auto; transform: translateY(0) scale(1); transition-delay: 0s; }
 .tool-drawer::before { content: ''; position: absolute; left: calc(var(--tool-origin) - 4px); top: -4px; width: 8px; height: 8px; transform: rotate(45deg); background: var(--tool-surface); border-left: 1px solid #ffffff14; border-top: 1px solid #ffffff14; z-index: 2; pointer-events: none; }

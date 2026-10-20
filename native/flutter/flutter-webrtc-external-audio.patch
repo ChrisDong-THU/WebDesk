@@ -1,0 +1,33 @@
+diff --git a/windows/CMakeLists.txt b/windows/CMakeLists.txt
+--- a/windows/CMakeLists.txt
++++ b/windows/CMakeLists.txt
+@@ -9,6 +9,12 @@ endif()
+ # Add the libwebrtc dependency
+ include("${CMAKE_CURRENT_SOURCE_DIR}/../third_party/CMakeLists.txt")
+ 
++# The upstream DLL opens the default microphone for custom RTP audio senders.
++set(WEBDESK_LIBWEBRTC "${CMAKE_SOURCE_DIR}/../../../.tools/webrtc-build/external-audio")
++if(NOT EXISTS "${WEBDESK_LIBWEBRTC}/libwebrtc.dll" OR NOT EXISTS "${WEBDESK_LIBWEBRTC}/libwebrtc.dll.lib")
++  message(FATAL_ERROR "Run scripts/prepare-flutter.ps1 to build WebDesk's external-audio WebRTC library.")
++endif()
++
+ # This value is used when generating builds using this plugin, so it must
+ # not be changed
+ set(PLUGIN_NAME "flutter_webrtc_plugin")
+@@ -60,7 +66,7 @@ target_include_directories(${PLUGIN_NAME} INTERFACE
+ target_link_libraries(${PLUGIN_NAME} PRIVATE 
+   flutter
+   flutter_wrapper_plugin
+-  "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/libwebrtc/lib/libwebrtc.dll.lib"
++  "${WEBDESK_LIBWEBRTC}/libwebrtc.dll.lib"
+   avrt.lib
+   ksuser.lib
+   mmdevapi.lib
+@@ -72,6 +78,6 @@ target_link_libraries(${PLUGIN_NAME} PRIVATE
+ 
+ # List of absolute paths to libraries that should be bundled with the plugin
+ set(flutter_webrtc_bundled_libraries
+-  "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/libwebrtc/lib/libwebrtc.dll"
++  "${WEBDESK_LIBWEBRTC}/libwebrtc.dll"
+   PARENT_SCOPE
+ )

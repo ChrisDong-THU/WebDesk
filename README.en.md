@@ -27,6 +27,8 @@ WebDesk lets you remotely control Windows from the web. The browser controller u
 
 The client currently pre-fills the project's existing server address. [Self-hosting](docs/self-hosting.md) is recommended for long-term use. Do not publish connection passwords in issues or logs.
 
+Device codes and connection passwords are saved in the current Windows user's application data directory and reused across restarts. Use the regenerate button to the right of the copy/power buttons to replace both. Regeneration disconnects the current remote session and invalidates the previous credentials.
+
 ## Local development
 
 Node.js 22 is required. Windows client builds also require Visual Studio C++ tools, the Windows SDK and a pinned Flutter version. See the [development guide](docs/development.md).

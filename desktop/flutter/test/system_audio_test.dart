@@ -2,18 +2,25 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:webdesk/native/system_audio.dart';
+import 'package:webdesk/session/cleanup.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('FlutterWebRTC.Method');
   final calls = <MethodCall>[];
   Future<Object?> Function(MethodCall)? intercept;
+  bool failDisposal = false;
   setUp(() {
     calls.clear();
     intercept = null;
+    failDisposal = false;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
           calls.add(call);
+          if (failDisposal &&
+              ['webdeskAudioDispose', 'trackDispose'].contains(call.method)) {
+            throw PlatformException(code: 'DisposeFailure');
+          }
           if (call.method == 'webdeskAudioCreate') {
             return {
               'streamId': 'audio-test',
@@ -71,6 +78,26 @@ void main() {
     expect(await audio.setEnabled(true), true);
     await audio.close();
   });
+
+  test(
+    'audio disposal failures still attempt track and stream release',
+    () async {
+      final audio = SystemAudio();
+      await audio.create();
+      failDisposal = true;
+      final closing = audio.close();
+      expect(identical(closing, audio.close()), isTrue);
+      await expectLater(closing, throwsA(isA<CleanupException>()));
+      expect(
+        calls.map((call) => call.method),
+        containsAllInOrder([
+          'webdeskAudioDispose',
+          'trackDispose',
+          'streamDispose',
+        ]),
+      );
+    },
+  );
 
   test('close waits for pending native capture then disposes it', () async {
     final audio = SystemAudio();

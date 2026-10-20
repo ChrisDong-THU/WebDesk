@@ -34,6 +34,20 @@ namespace WebDesk.Native {
     internal static void Reply(Stream stream,uint error,byte[] data) {
       var writer=new BinaryWriter(stream); writer.Write(error); writer.Write(data.Length); writer.Write(data); writer.Flush();
     }
+    internal static int ForwardReply(Stream source,Stream destination,int limit,byte[] buffer,out uint error) {
+      if(buffer.Length==0) throw new ArgumentException("Empty forwarding buffer");
+      var header=Exact(source,8);error=BitConverter.ToUInt32(header,0);
+      int size=BitConverter.ToInt32(header,4);
+      if(size<0||size>limit) throw new InvalidDataException("Invalid server response");
+      destination.Write(header,0,header.Length);
+      int remaining=size;
+      while(remaining>0) {
+        int count=source.Read(buffer,0,Math.Min(buffer.Length,remaining));
+        if(count==0) throw new EndOfStreamException();
+        destination.Write(buffer,0,count);remaining-=count;
+      }
+      destination.Flush();return size;
+    }
     internal static bool Connect(NamedPipeServerStream pipe,WaitHandle stop,int timeout) {
       var pending=pipe.BeginWaitForConnection(null,null);
       try { if(WaitHandle.WaitAny(new[]{pending.AsyncWaitHandle,stop},timeout)!=0) return false; pipe.EndWaitForConnection(pending); return true; }

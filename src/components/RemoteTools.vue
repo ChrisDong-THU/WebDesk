@@ -7,7 +7,7 @@ import Icon from './Icon.vue';
 import QualitySelect from './QualitySelect.vue';
 const props = defineProps<{ session: ReturnType<typeof useSession> }>();
 const localClipboard = navigator.clipboard;
-const { quality, connected, transfer, error, inSession, audioEnabled, audioBusy } = props.session;
+const { quality, connected, transfer, error, inSession } = props.session;
 const panel = ref(''), working = ref(false), text = ref(''), notice = ref('');
 const contentPanel = ref('files'), arrowLeft = ref(32), availableHeight = ref(440);
 const root = ref<HTMLElement>(), picker = ref<HTMLInputElement>();
@@ -94,13 +94,6 @@ async function download() {
           <QualitySelect v-model="quality.maxFramerate" :disabled="!connected" label="实时帧率"
             :options="[10, 20, 30, 60, 120].map(value => ({ value, label: `${value} FPS` }))" @open="closePanel()" />
         </div>
-        <button class="toolbar-button audio-toggle" role="switch" aria-label="声音传输"
-          :aria-checked="audioEnabled" :disabled="!connected || audioBusy" :aria-busy="audioBusy"
-          :title="audioEnabled ? '关闭远程电脑声音' : '开启远程电脑声音'"
-          @click="session.toggleAudio()">
-          <Icon :name="audioEnabled ? 'volume' : 'volumeOff'" /><span>声音</span>
-          <span class="switch-track" :class="{ on: audioEnabled }" aria-hidden="true"><span /></span>
-        </button>
       </div>
       <span class="tool-divider" />
       <div class="tool-triggers">

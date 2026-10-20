@@ -2,6 +2,7 @@
 import { CHUNK_SIZE, MAX_FILE_SIZE } from '../../shared/tools';
 export { CHUNK_SIZE, MAX_FILE_SIZE } from '../../shared/tools';
 const WINDOW_SIZE = 256 * 1024;
+const PIPELINE_WINDOWS = 4;
 export type FileInfo = { id: string; name: string; size: number };
 export type FileSink = { write(data: Uint8Array): Promise<void>; close(): Promise<unknown>; abort(): Promise<void> };
 export type FileSource = { name: string; size: number; read(offset: number, length: number): Promise<ArrayBuffer> };
@@ -21,8 +22,8 @@ export class DesktopTools {
   private preparedSink?: FileSink;
   constructor(pc: RTCPeerConnection, private role: 'host' | 'controller', private options: ToolsOptions = {}) {
     // Negotiated ID avoids the upstream ondatachannel handler, which owns the
-    // unordered MessageChannel. No offer/answer or media track is replaced.
-    this.channel = pc.createDataChannel('WebDesk tools v1', { negotiated: true, id: 42, ordered: true });
+    // MessageChannel. No offer/answer or media track is replaced.
+    this.channel = pc.createDataChannel('WebDesk tools v2', { negotiated: true, id: 42, ordered: true });
     this.channel.binaryType = 'arraybuffer';
     this.channel.bufferedAmountLowThreshold = 64 * 1024;
     this.channel.onclose = () => this.close();
@@ -68,8 +69,8 @@ export class DesktopTools {
       return;
     }
     // Requests may themselves send files and wait for replies. Do not block the
-    // ordered receive queue with them; file begin/flush/end remain serialized.
-    if (['file.begin', 'file.flush', 'file.end', 'file.abort'].includes(message.operation)) await this.respond(message);
+    // ordered receive queue with them; file begin/ack/end remain serialized.
+    if (['file.begin', 'file.ack', 'file.end', 'file.abort'].includes(message.operation)) await this.respond(message);
     else void this.respond(message);
   }
   private async respond(message: any) {
@@ -77,14 +78,16 @@ export class DesktopTools {
     catch (error) { if (!this.closed) this.json({ id: message.id, reply: null, error: error instanceof Error ? error.message : '操作失败' }); }
   }
   private async handle(operation: string, data: any): Promise<any> {
-    if (operation === 'ping') return { version: 1 };
+    if (operation === 'ping') return { version: 2 };
     if (operation === 'file.begin') {
       if (this.incoming) throw Error('已有文件正在接收');
       if (!data || typeof data.name !== 'string' || data.name.length > 255 || !Number.isSafeInteger(data.size) || data.size < 0 || data.size > MAX_FILE_SIZE) throw Error('文件无效或超过 2 GB');
       let sink: FileSink;
       if (this.role === 'host') {
         const file = await this.native('file.begin', data);
-        sink = { write: bytes => this.native('file.write', { id: file.id, bytes }), close: () => this.native('file.end', { id: file.id }), abort: () => this.native('file.abort', { id: file.id }) };
+        sink = { write: bytes => this.native('file.write', { id: file.id, bytes }), close: () => this.native('file.end', { id: file.id }),
+          // Cleanup remains callable after the transport has been revoked.
+          abort: () => this.options.native!('file.abort', { id: file.id }) };
       } else {
         if (!this.preparedSink) throw Error('请先选择本地保存位置');
         sink = this.preparedSink; this.preparedSink = undefined;
@@ -93,7 +96,7 @@ export class DesktopTools {
       this.incoming = { meta: data, sink, bytes: 0 };
       return true;
     }
-    if (operation === 'file.flush') return this.incoming?.bytes;
+    if (operation === 'file.ack') return this.incoming?.bytes;
     if (operation === 'file.end') {
       const item = this.incoming;
       if (!item || item.bytes !== item.meta.size) throw Error('文件大小不完整');
@@ -120,18 +123,28 @@ export class DesktopTools {
     let begun = false;
     try {
       await this.request('file.begin', { name: file.name, size: file.size }); begun = true;
+      const confirmations: Promise<void>[] = [];
+      let failed: Error | undefined;
+      const confirmed = async () => { await confirmations.shift(); if (failed) throw failed; };
       let offset = 0;
       while (offset < file.size) {
         const end = Math.min(offset + WINDOW_SIZE, file.size);
         while (offset < end) {
+          if (failed) throw failed;
           const bytes = await file.read(offset, Math.min(CHUNK_SIZE, end - offset));
-          if (!bytes.byteLength || bytes.byteLength > CHUNK_SIZE) throw Error('文件读取失败');
+          if (!bytes.byteLength || bytes.byteLength > Math.min(CHUNK_SIZE, end - offset)) throw Error('文件读取失败');
           await this.drain(); this.channel.send(bytes); offset += bytes.byteLength;
         }
-        // Acknowledged only after the receiver has persisted this window.
-        if (await this.request('file.flush') !== offset) throw Error('文件传输校验失败');
-        this.options.onProgress?.({ name: file.name, bytes: offset, total: file.size, direction: 'send' });
+        const expected = offset;
+        // Observe rejections immediately, even while reading the next window.
+        // ACK confirms ordered writes; file.end is the durable commit boundary.
+        confirmations.push(this.request('file.ack').then(bytes => {
+          if (bytes !== expected) throw Error('文件传输校验失败');
+          this.options.onProgress?.({ name: file.name, bytes: expected, total: file.size, direction: 'send' });
+        }).catch(error => { failed ??= error; }));
+        if (confirmations.length >= PIPELINE_WINDOWS) await confirmed();
       }
+      while (confirmations.length) await confirmed();
       return await this.request('file.end');
     } catch (error) { if (begun && !this.closed) await this.request('file.abort').catch(() => {}); throw error; }
     finally { this.sending = false; }

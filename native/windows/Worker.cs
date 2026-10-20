@@ -19,6 +19,7 @@ namespace WebDesk.Native {
     readonly Dictionary<ushort,uint> keys=new Dictionary<ushort,uint>(); uint buttons;
     readonly ImageCodecInfo jpeg;
     Bitmap rawBitmap;
+    byte[] rawBytes;
     internal Worker() { foreach(var c in ImageCodecInfo.GetImageEncoders()) if(c.MimeType=="image/jpeg") jpeg=c; }
     void Bind() {
       IntPtr next=Win32.OpenInputDesktop(0,false,InputDesktopAccess); Win32.Check(next!=IntPtr.Zero);
@@ -64,6 +65,10 @@ namespace WebDesk.Native {
             input.type=1; input.value.key.key=(ushort)a; input.value.key.flags=(uint)flags;
           } else if(kind==0) {
             if((flags&~0xD81F)!=0 || Math.Abs((long)data)>1200000) throw new InvalidDataException();
+            // Tag remote mouse events so our own caption buttons can avoid
+            // a modal tracking loop that would stall Flutter input delivery.
+            // Must match kWebDeskRemoteMouseTag in remote_caption_buttons.h.
+            input.value.mouse.extra=new UIntPtr(0x57444249u);
             input.type=0; input.value.mouse.x=a; input.value.mouse.y=b; input.value.mouse.flags=(uint)flags; input.value.mouse.data=unchecked((uint)data);
           } else throw new InvalidDataException();
           bool ok=false;
@@ -98,9 +103,14 @@ namespace WebDesk.Native {
       }
       var locked=rawBitmap.LockBits(new Rectangle(0,0,width,height),ImageLockMode.ReadOnly,PixelFormat.Format32bppArgb);
       try {
-        byte[] bytes=new byte[8+width*height*4];
+        // Worker serves one request at a time and Reply completes before reuse.
+        // Avoid allocating a full managed frame on every capture.
+        int length=8+width*height*4;
+        if(rawBytes==null||rawBytes.Length!=length) rawBytes=new byte[length];
+        byte[] bytes=rawBytes;
         Buffer.BlockCopy(BitConverter.GetBytes(width),0,bytes,0,4);Buffer.BlockCopy(BitConverter.GetBytes(height),0,bytes,4,4);
-        for(int row=0;row<height;row++) Marshal.Copy(IntPtr.Add(locked.Scan0,row*locked.Stride),bytes,8+row*width*4,width*4);
+        if(locked.Stride==width*4) Marshal.Copy(locked.Scan0,bytes,8,width*height*4);
+        else for(int row=0;row<height;row++) Marshal.Copy(IntPtr.Add(locked.Scan0,row*locked.Stride),bytes,8+row*width*4,width*4);
         return bytes;
       } finally {rawBitmap.UnlockBits(locked);}
     }

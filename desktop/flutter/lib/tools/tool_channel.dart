@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import '../session/cleanup.dart';
 
 final _random = Random.secure();
 String randomId() => List.generate(
@@ -32,7 +33,13 @@ String safeFileName(String name) {
 /// Matches the existing browser's reliable, negotiated SCTP channel (ID 42).
 /// Files are streamed and paths never cross the network.
 class ToolChannel {
-  ToolChannel._(this.channel, this.setAudioEnabled) {
+  ToolChannel._(
+    this.channel,
+    this.setAudioEnabled,
+    this.getMediaStats,
+    this._downloadsDirectory,
+    this._selectFile,
+  ) {
     channel.onMessage = (message) {
       if (_closed) return;
       final size = message.isBinary
@@ -45,7 +52,9 @@ class ToolChannel {
       }
       _queue = _queue
           .then((_) => _receive(message))
-          .catchError((Object _) => close())
+          .catchError((Object _) {
+            unawaited(close());
+          })
           .whenComplete(() => _queuedBytes -= size);
     };
     channel.onDataChannelState = (state) {
@@ -55,21 +64,31 @@ class ToolChannel {
   static Future<ToolChannel> create(
     RTCPeerConnection pc, {
     Future<bool> Function(bool)? setAudioEnabled,
+    Future<Map<String, dynamic>> Function()? getMediaStats,
+    Future<Directory?> Function()? downloadsDirectory,
+    Future<XFile?> Function()? selectFile,
   }) async => ToolChannel._(
     await pc.createDataChannel(
-      'WebDesk tools v1',
+      'WebDesk tools v2',
       RTCDataChannelInit()
         ..negotiated = true
         ..id = 42
         ..ordered = true,
     ),
     setAudioEnabled,
+    getMediaStats,
+    downloadsDirectory ?? getDownloadsDirectory,
+    selectFile ?? (() => openFile(confirmButtonText: '发送')),
   );
   final RTCDataChannel channel;
   final Future<bool> Function(bool)? setAudioEnabled;
+  final Future<Map<String, dynamic>> Function()? getMediaStats;
+  final Future<Directory?> Function() _downloadsDirectory;
+  final Future<XFile?> Function() _selectFile;
   final _pending = <String, Completer<dynamic>>{};
   final _selected = <String, XFile>{};
   Future<void> _queue = Future.value();
+  Future<void>? _closing;
   bool _closed = false, _selecting = false, _sending = false;
   int _queuedBytes = 0, _received = 0, _expected = 0;
   RandomAccessFile? _incoming;
@@ -77,6 +96,7 @@ class ToolChannel {
   String? _destination;
   static const chunkSize = 16 * 1024,
       windowSize = 256 * 1024,
+      pipelineWindows = 4,
       maxSize = 2 * 1024 * 1024 * 1024;
   void _active() {
     if (_closed) throw StateError('会话已结束');
@@ -91,11 +111,23 @@ class ToolChannel {
     _active();
     final id = randomId(), completer = Completer<dynamic>();
     _pending[id] = completer;
+    final timer = Timer(const Duration(seconds: 30), () {
+      if (!completer.isCompleted) {
+        completer.completeError(TimeoutException('工具通道响应超时'));
+      }
+    });
     try {
-      await _json({'id': id, 'operation': operation, 'data': data});
-      return await completer.future.timeout(const Duration(seconds: 30));
+      // Observe the reply immediately: close may reject it while send is
+      // still awaiting the platform channel.
+      final results = await Future.wait<dynamic>([
+        _json({'id': id, 'operation': operation, 'data': data}),
+        completer.future,
+      ], eagerError: true);
+      return results[1];
     } finally {
+      timer.cancel();
       _pending.remove(id);
+      if (!completer.isCompleted) completer.complete(null);
     }
   }
 
@@ -132,7 +164,7 @@ class ToolChannel {
     }
     if ([
       'file.begin',
-      'file.flush',
+      'file.ack',
       'file.end',
       'file.abort',
     ].contains(value['operation'])) {
@@ -163,13 +195,17 @@ class ToolChannel {
   Future<dynamic> _handle(String operation, Map data) async {
     _active();
     switch (operation) {
+      case 'media.stats':
+        final handler = getMediaStats;
+        if (handler == null) throw StateError('媒体统计未就绪');
+        return handler();
       case 'audio.set':
         if (data['enabled'] is! bool) throw const FormatException('无效的声音设置');
         final handler = setAudioEnabled;
         if (handler == null) throw StateError('此客户端不支持声音传输');
         return handler(data['enabled'] as bool);
       case 'ping':
-        return {'version': 1};
+        return {'version': 2};
       case 'clipboard.read':
         final text =
             (await Clipboard.getData(Clipboard.kTextPlain))?.text ?? '';
@@ -192,7 +228,7 @@ class ToolChannel {
           throw const FormatException('文件无效或超过 2 GB');
         }
         final name = safeFileName(data['name'] as String);
-        final downloads = await getDownloadsDirectory();
+        final downloads = await _downloadsDirectory();
         if (downloads == null) throw StateError('无法找到下载目录');
         final root = await Directory(
           p.join(downloads.path, 'WebDesk'),
@@ -205,8 +241,9 @@ class ToolChannel {
         _expected = size;
         _received = 0;
         return true;
-      case 'file.flush':
-        await _incoming?.flush();
+      case 'file.ack':
+        // Ordered receive queue has completed all previous writes. Durability
+        // is guaranteed by file.end, not a costly disk flush per window.
         return _incoming == null ? null : _received;
       case 'file.end':
         if (_incoming == null || _received != _expected) {
@@ -232,7 +269,7 @@ class ToolChannel {
         }
         _selecting = true;
         try {
-          final file = await openFile(confirmButtonText: '发送');
+          final file = await _selectFile();
           _active();
           if (file == null) return null;
           final size = await file.length();
@@ -264,19 +301,38 @@ class ToolChannel {
       if (size > maxSize) throw StateError('文件超过 2 GB');
       await _request('file.begin', {'name': file.name, 'size': size});
       begun = true;
+      final confirmations = <Future<void>>[];
+      Object? failed;
+      Future<void> confirmed() async {
+        await confirmations.removeAt(0);
+        if (failed != null) throw failed!;
+      }
+
       var offset = 0;
       while (offset < size) {
         final end = min(offset + windowSize, size);
         while (offset < end) {
           _active();
+          if (failed != null) throw failed!;
           final bytes = await handle.read(min(chunkSize, end - offset));
           if (bytes.isEmpty) throw StateError('文件读取失败');
           await channel.send(RTCDataChannelMessage.fromBinary(bytes));
           offset += bytes.length;
         }
-        if (await _request('file.flush') != offset) {
-          throw StateError('文件传输校验失败');
-        }
+        final expected = offset;
+        confirmations.add(
+          _request('file.ack')
+              .then<void>((bytes) {
+                if (bytes != expected) throw StateError('文件传输校验失败');
+              })
+              .catchError((Object error) {
+                failed ??= error;
+              }),
+        );
+        if (confirmations.length >= pipelineWindows) await confirmed();
+      }
+      while (confirmations.isNotEmpty) {
+        await confirmed();
       }
       return await _request('file.end');
     } catch (_) {
@@ -287,28 +343,41 @@ class ToolChannel {
       }
       rethrow;
     } finally {
-      await handle?.close();
-      _sending = false;
+      try {
+        await handle?.close();
+      } finally {
+        _sending = false;
+      }
     }
   }
 
   Future<void> _abort() async {
-    await _incoming?.close();
+    final incoming = _incoming, partial = _partial;
     _incoming = null;
-    if (_partial != null && await _partial!.exists()) await _partial!.delete();
     _partial = null;
+    await cleanup({
+      'partial handle': () async {
+        await incoming?.close();
+      },
+      'partial file': () async {
+        if (partial != null && await partial.exists()) await partial.delete();
+      },
+    });
   }
 
-  Future<void> close() async {
-    if (_closed) return;
+  Future<void> close() {
+    if (_closed) return _closing ?? Future.value();
     _closed = true;
     for (final pending in _pending.values) {
       pending.completeError(StateError('连接已结束'));
     }
     _pending.clear();
     _selected.clear();
-    // Don't await the receive queue here: an error may have called us from it.
-    unawaited(_queue.whenComplete(_abort));
-    await channel.close();
+    // Receive error handlers schedule close without awaiting it, so callers
+    // can await both channel closure and removal of incomplete disk files.
+    return _closing = Future.wait<void>([
+      _queue.then((_) => _abort()),
+      channel.close(),
+    ]).then((_) {});
   }
 }
