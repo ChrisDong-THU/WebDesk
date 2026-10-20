@@ -29,7 +29,7 @@ const output = `// GENERATED from billd-desk-server ${revision} (MIT).\n// edit 
 const manifest = JSON.stringify({ repository: 'https://github.com/galaxy-s10/billd-desk-server', revision,
   policy: 'Original blocks with TypeScript types erased; auth, scoped rooms, legacy wire envelope and quiet logger supplied by WebDesk.',
   sources: [file, enumsFile].map(file => ({ file, sha256: hash(fs.readFileSync(root + file, 'utf8').replace(/\r\n/g, '\n')) })), blocks: records }, null, 2) + '\n';
-for (const [file, text] of [['server/billd/signaling.mjs', output], ['docs/upstream-server-manifest.json', manifest]]) {
+for (const [file, text] of [['server/billd/signaling.mjs', output], ['third_party/billd-desk-server/manifest.json', manifest]]) {
   if (check) { if (fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n') !== text) throw Error(`Upstream server drift: ${file}`); }
   else { fs.mkdirSync(file.slice(0, file.lastIndexOf('/')), { recursive: true }); fs.writeFileSync(file, text); }
 }

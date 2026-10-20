@@ -92,6 +92,6 @@ visit(nativeAst);
 if (nativeBlocks.length !== allowed.length) throw Error('Missing native handler');
 write('electron-main/billd/handlers.ts', "import { IPC_EVENT } from '../../src/billd/events';\nexport function registerNativeHandlers(environment) {\nconst { ipcMain, nutjs, windowMap, winWebContentsSend, desktopCapturer, screen, platform } = environment;\n" + nativeBlocks.join('\n') + '\n}');
 const manifest = JSON.stringify({ revision, policy: 'Core blocks are extracted verbatim. WebRTC ICE configuration is the only rewritten block; wrapper code supplies dependencies and deployment interfaces.', blocks: records }, null, 2) + '\n';
-if (check) { if (fs.readFileSync('docs/upstream-manifest.json','utf8').replace(/\r\n/g, '\n') !== manifest) throw Error('Manifest drift'); }
-else fs.writeFileSync('docs/upstream-manifest.json', manifest);
+if (check) { if (fs.readFileSync('third_party/billd-desk/manifest.json','utf8').replace(/\r\n/g, '\n') !== manifest) throw Error('Manifest drift'); }
+else fs.writeFileSync('third_party/billd-desk/manifest.json', manifest);
 console.log(`Verified ${records.length} upstream blocks at ${revision}`);

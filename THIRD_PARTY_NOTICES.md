@@ -4,8 +4,8 @@ WebDesk is an independent derivative of billd-desk. WebDesk-owned changes are MI
 
 ## Retained upstream code
 
-- **billd-desk** — MIT, Copyright (c) 2023-PRESENT shuisheng. https://github.com/galaxy-s10/billd-desk, commit `61be620eb35b0004dc66c296f0fdd8c62700b1b9`. 56 extracted blocks; source subset in `third_party/billd-desk/`, hashes in `docs/upstream-manifest.json`.
-- **billd-desk-server** — MIT as declared in package.json, by shuisheng. https://github.com/galaxy-s10/billd-desk-server, commit `c73983e543341c08ce9e4fb7c52446be50b6c6a2`. Five extracted blocks; source subset in `third_party/billd-desk-server/`, hashes in `docs/upstream-server-manifest.json`.
+- **billd-desk** — MIT, Copyright (c) 2023-PRESENT shuisheng. https://github.com/galaxy-s10/billd-desk, commit `61be620eb35b0004dc66c296f0fdd8c62700b1b9`. 56 extracted blocks; source subset in `third_party/billd-desk/`, hashes in `third_party/billd-desk/manifest.json`.
+- **billd-desk-server** — MIT as declared in package.json, by shuisheng. https://github.com/galaxy-s10/billd-desk-server, commit `c73983e543341c08ce9e4fb7c52446be50b6c6a2`. Five extracted blocks; source subset in `third_party/billd-desk-server/`, hashes in `third_party/billd-desk-server/manifest.json`.
 
 Generated files identify their source and extraction scripts. UI, authentication boundaries, file/clipboard tools, Flutter host, native Windows service and media bridges are WebDesk implementations.
 

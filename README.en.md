@@ -1,37 +1,75 @@
-# WebDesk
+<p align="center"><img src="src/assets/webdesk-icon.svg" width="80" alt="WebDesk"></p>
+<h1 align="center">WebDesk</h1>
+<p align="center">Your Windows desktop, within reach anywhere.</p>
+<p align="center">
+<a href="https://github.com/ChrisDong-THU/WebDesk/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/ChrisDong-THU/WebDesk"></a>
+<a href="https://github.com/ChrisDong-THU/WebDesk/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/ChrisDong-THU/WebDesk/actions/workflows/ci.yml/badge.svg"></a>
+<a href="LICENSE.txt"><img alt="License MIT" src="https://img.shields.io/badge/license-MIT-green"></a>
+<img alt="Windows x64" src="https://img.shields.io/badge/host-Windows%20x64-blue">
+</p>
+<p align="center"><a href="README.md">中文</a> · <a href="docs/development.md">Development</a> · <a href="docs/self-hosting.md">Self-hosting</a></p>
 
-**Control a Windows desktop from your browser.**
-
-[中文](README.md) · [Downloads](https://github.com/ChrisDong-THU/WebDesk/releases/latest) · [Development](docs/development.md) · [Self-hosting](docs/self-hosting.md)
-
-WebDesk combines a Vue browser controller, a Flutter Windows host, native WebRTC and a Node.js/Socket.IO signaling server. It is an independent MIT-licensed derivative of [billd-desk](https://github.com/galaxy-s10/billd-desk) and [billd-desk-server](https://github.com/galaxy-s10/billd-desk-server), not an official BilldDesk product or a copy of its proprietary client.
+WebDesk lets you remotely control Windows from the web. The browser controller uses Vue and WebRTC; the Windows client uses Flutter, native WebRTC and a desktop helper service; the server uses Node.js / Socket.IO.
 
 ## Features
 
-- Mouse and keyboard control, punctuation and key combinations.
-- WebRTC direct connections with configurable TURN fallback.
-- Six quality presets (360p to 8K), bounded by the actual display; live bitrate and frame-rate changes.
-- Bidirectional files, text clipboard, optional system audio and video-only fullscreen.
-- Windows tray integration and a native service for lock-screen desktop capture/input.
+- Direct WebRTC connections, with a self-configured TURN relay when a direct connection is unavailable.
+- Multiple quality presets adapted to the display's actual dimensions; adjust quality, bitrate and frame rate during a connection.
+- Bidirectional file transfers, a text clipboard and optional system audio streaming.
+- A native Windows service that supports switching to and interacting with the lock-screen desktop.
 
-## Download
+## Getting started
 
-Get the Windows x64 installer and SHA-256 checksum from [Releases](https://github.com/ChrisDong-THU/WebDesk/releases/latest). Administrator permission is required to install/configure the native service. The installer is currently unsigned.
+1. Download and install WebDesk from [Releases](https://github.com/ChrisDong-THU/WebDesk/releases/latest).
+2. Open the client, confirm the server address and enable remote control.
+3. Open the same server address in a modern desktop browser on another computer, then enter the device code and connection password.
+4. When finished, stop remote control in the client or exit from the system tray.
 
-Start the Windows host, check its server address and enable remote control. Open the same address in another desktop browser and enter the device code and connection password. The client pre-fills the project's existing endpoint, but it is editable; self-host for long-term use. No public hosting SLA is provided.
+The client currently pre-fills the project's existing server address. [Self-hosting](docs/self-hosting.md) is recommended for long-term use. Do not publish connection passwords in issues or logs.
 
-## Develop
+## Local development
 
-Node.js 22 is required. Copy `.env.example` to `.env`, then run `npm ci`, `npm run server` and, in another terminal, `npm run dev`. Use `http://127.0.0.1:4300` in the Windows host for local testing. Run `npm test`, `npm run build` and `npm run release:check` before contributing.
+Node.js 22 is required. Windows client builds also require Visual Studio C++ tools, the Windows SDK and a pinned Flutter version. See the [development guide](docs/development.md).
 
-Windows builds additionally require Visual Studio C++ tools and a Windows SDK. `npm run prepare:flutter` prepares pinned Flutter/WebRTC dependencies. See [development](docs/development.md) for installer setup and build instructions.
+```sh
+git clone https://github.com/ChrisDong-THU/WebDesk.git
+cd WebDesk
+npm ci
+```
 
-Electron and nut.js are compatibility-test dependencies only. They are not shipped in the Flutter installer. Native capture/input is WebDesk code; generated upstream blocks have reproducible manifests.
+Copy `.env.example` to `.env`, then run these commands in separate terminals:
 
-## Verification and limitations
+```sh
+npm run server  # Signaling: 127.0.0.1:4300
+npm run dev     # Web: localhost:5173, proxied to local signaling
+```
 
-0.5.3 passed 33 Node tests, 16 Flutter tests, a Windows release build and a public UDP TURN protocol smoke test. Lock-screen password input has been tested on Windows. Sleep/resume, GPU/driver combinations, UAC and keyboard layouts still require validation on your devices. Protocol tests do not establish performance parity with the official proprietary BilldDesk client.
+Set the Windows client's server address to `http://127.0.0.1:4300`. Production deployments should use HTTPS with correctly configured allowed origins and TURN services.
 
-[Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
+```sh
+npm test
+npm run build
+npm run release:check
+```
 
-MIT for WebDesk code; dependency licenses remain applicable. See [LICENSE](LICENSE.txt) and [third-party notices](THIRD_PARTY_NOTICES.md).
+## Project structure
+
+```text
+src/                 Vue controller and upstream adapters
+server/              Authentication, signaling and static assets
+shared/              Shared protocol definitions
+desktop/flutter/     Flutter Windows client
+native/              Desktop service, input, capture and audio bridges
+build/inno/          Windows installer
+scripts/             Build, provenance checks and test scripts
+tests/               Web, protocol and integration tests
+third_party/         Pinned upstream snapshots, manifests and licenses
+deploy/              Self-hosting examples and release scripts
+docs/                Development and self-hosting guides
+```
+
+`electron-main/` contains only protocol compatibility test adapters. Electron and nut.js are development dependencies and **are not included in the Flutter installer**. The directory name preserves compatibility with upstream extraction paths; it is not a separate client. See [architecture and provenance](docs/development.md#架构与来源).
+
+## License and acknowledgments
+
+WebDesk is distributed under the [MIT license](LICENSE.txt). Third-party components retain their own licenses; see [third-party notices](THIRD_PARTY_NOTICES.md) and `third_party/licenses/`. Thanks to the contributors of billd-desk, Flutter, flutter-webrtc, WebRTC, Vue, Socket.IO and Inno Setup.

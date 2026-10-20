@@ -58,17 +58,17 @@ npm run release:check
 src/                 Vue 网页与上游适配
 server/              认证、信令与静态资源服务
 shared/              双端协议定义
-desktop/flutter/    Flutter Windows 客户端
+desktop/flutter/     Flutter Windows 客户端
 native/              桌面服务、输入、采集与音频桥接
 build/inno/          Windows 安装器
 scripts/             构建、来源校验和测试脚本
 tests/               网页、协议与集成测试
-third_party/         固定上游源码快照及许可证
+third_party/         固定上游源码快照、校验清单及许可证
 deploy/              自部署示例与发布脚本
-docs/                开发、架构与自部署文档
+docs/                开发与自部署指南
 ```
 
-`electron-main/` 仅保留协议兼容测试适配器；Electron 和 nut.js 是开发依赖，**不进入 Flutter 安装包**。目录名称为保留上游提取路径兼容，并非另一套客户端。详见[架构与来源](docs/architecture.md)。
+`electron-main/` 仅保留协议兼容测试适配器；Electron 和 nut.js 是开发依赖，**不进入 Flutter 安装包**。目录名称为保留上游提取路径兼容，并非另一套客户端。详见[架构与来源](docs/development.md#架构与来源)。
 
 ## 许可证与致谢
 

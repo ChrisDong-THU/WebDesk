@@ -4,7 +4,7 @@
 
 ## 提交前
 
-1. 阅读 [开发指南](docs/development.md) 和 [架构说明](docs/architecture.md)。
+1. 阅读 [开发指南](docs/development.md)，了解架构与上游代码边界。
 2. 从 `main` 新建分支，遵循 `.editorconfig` 和现有代码风格。
 3. 运行 `npm test`、`npm run build`、`npm run release:check`。修改 Flutter 时另运行 `flutter analyze`、`flutter test`；涉及原生输入或采集的修改须提供 Windows 实测情况。
 4. 在 PR 中描述问题、修改后行为和实际验证结果；界面修改附无敏感信息的截图。

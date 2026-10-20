@@ -54,6 +54,34 @@ GitHub 的 **Windows build** workflow 在 main 分支的客户端或构建脚本
 
 上游生成块不能直接手改。先编辑提取脚本或适配层，再运行 `npm run upstream:check`。第三方原生补丁保存在 `native/flutter/flutter-webrtc.patch`。升级原生依赖时也应更新 `third_party/licenses/` 的来源和许可文本。
 
+## 架构与来源
+
+```mermaid
+flowchart LR
+  B[Vue 浏览器主控] <-->|认证 / SDP / ICE| S[Node.js 信令服务]
+  S <-->|注册 / 会话| W[Flutter Windows 客户端]
+  B <-->|WebRTC 视频 / 音频 / 数据通道| W
+  B <-. TURN 回退 .-> T[Coturn]
+  T <-. 中继 .-> W
+  W --> N[本机桌面服务与会话辅助进程]
+  N --> D[Windows 桌面 / 输入 / 锁屏]
+```
+
+- `src/` 负责浏览器控制界面；`server/` 负责注册、认证、信令和静态资源，不保存桌面画面或传输文件。
+- `desktop/flutter/lib/` 负责 Windows 界面、会话和媒体生命周期、文件与剪贴板。
+- `native/windows/` 负责 LocalSystem 服务、进程与管道身份校验、会话辅助进程、桌面切换与输入；`native/flutter/` 负责采集、系统音频桥接和插件补丁。
+- `electron-main/` 仅用于上游 IPC 兼容测试，无 Electron 应用入口，不进入发行包。
+
+正常桌面由原生 WebRTC 采集；桌面切换时使用辅助进程的帧源并替换同一 PeerConnection 的视频轨道，像素不经过 JavaScript/Dart JPEG 或 canvas 中转。安全桌面帧源目前最高 30 FPS，系统声音默认关闭。媒体优先直连，TURN 中继的带宽会限制清晰度和帧率；8K 是请求上限，实际尺寸受显示器和采集约束限制。
+
+| 来源 | 校验清单 | 用途 |
+| --- | --- | --- |
+| billd-desk | [manifest.json](../third_party/billd-desk/manifest.json) | 56 段 WebRTC、输入、约束和状态代码 |
+| billd-desk-server | [manifest.json](../third_party/billd-desk-server/manifest.json) | 5 段信令枚举和转发函数 |
+| Flutter / flutter-webrtc / libwebrtc | [dependencies.json](../native/flutter/dependencies.json) | 原生 Windows 客户端 |
+
+清单记录固定版本与来源哈希；`third_party/billd-*` 仅保留提取所需的源码，不是完整上游项目。UI、认证与生命周期边界、文件/剪贴板、Flutter 客户端、桌面服务和音频桥接由 WebDesk 实现，不包含官方 BilldDesk 闭源客户端。权限边界详见[安全策略](../SECURITY.md)。
+
 ## 发布检查
 
 - 完成 Node/Flutter 分析与测试，以及 Windows 实机回归。
