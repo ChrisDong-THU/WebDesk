@@ -1,0 +1,69 @@
+{
+  "name": "webdesk",
+  "productName": "WebDesk",
+  "description": "Browser-to-Windows remote desktop based on billd-desk",
+  "author": "WebDesk contributors",
+  "version": "0.5.3",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "prepare:flutter": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare-flutter.ps1",
+    "build:flutter": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-flutter.ps1",
+    "build:inno": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-flutter.ps1 -Installer",
+    "dev": "vite --host 127.0.0.1",
+    "preview:ui": "vite --config tests/ui-preview.config.ts",
+    "preview:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/preview-installer.ps1",
+    "dev:host": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-host.ps1",
+    "release:check": "node scripts/check-release.mjs",
+    "server": "node --env-file-if-exists=.env server/index.mjs",
+    "package:server": "npm run release:check && npm run build && node scripts/package-server.mjs",
+    "build": "npm run upstream:check && vue-tsc --noEmit && vite build",
+    "build:icons": "node scripts/run-electron.cjs scripts/build-icons.cjs",
+    "build:native": "node scripts/build-native.cjs",
+    "build:win": "npm run build:inno",
+    "pack:win": "npm run build:flutter",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "node --test tests/*.test.mjs",
+    "test:windows": "node scripts/run-electron.cjs scripts/test-windows.cjs",
+    "preview": "vite preview --host 127.0.0.1",
+    "upstream:check": "node scripts/extract-billd.mjs --check && node scripts/extract-billd-server.mjs --check",
+    "pretest": "npm run build"
+  },
+  "dependencies": {
+    "@nut-tree-fork/shared": "4.2.2",
+    "billd-utils": "0.0.25",
+    "pinia": "2.1.6",
+    "socket.io": "4.8.0",
+    "socket.io-client": "4.8.0",
+    "vue": "3.5.13"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.2",
+    "@vitejs/plugin-vue": "5.2.1",
+    "electron": "33.2.1",
+    "esbuild": "0.24.2",
+    "typescript": "5.7.2",
+    "vite": "6.0.3",
+    "vue-tsc": "2.1.10",
+    "@nut-tree-fork/nut-js": "4.2.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ChrisDong-THU/WebDesk.git"
+  },
+  "homepage": "https://github.com/ChrisDong-THU/WebDesk#readme",
+  "bugs": {
+    "url": "https://github.com/ChrisDong-THU/WebDesk/issues"
+  },
+  "keywords": [
+    "remote-desktop",
+    "webrtc",
+    "flutter",
+    "windows",
+    "vue"
+  ]
+}

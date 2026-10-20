@@ -1,0 +1,25 @@
+[Unit]
+Description=WebDesk signaling and web server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=webdesk
+Group=webdesk
+WorkingDirectory=/opt/webdesk/current
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/webdesk/webdesk.env
+ExecStart=/usr/bin/node server/index.mjs
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

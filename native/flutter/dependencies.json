@@ -1,0 +1,21 @@
+{
+  "flutter": {
+    "repository": "https://github.com/flutter/flutter.git",
+    "commit": "abaf9c523780a608bd46686fd5e53740a07077f8",
+    "version": "3.47.7"
+  },
+  "flutterWebrtc": {
+    "repository": "https://github.com/flutter-webrtc/flutter-webrtc.git",
+    "commit": "db81cea2730ae65b53fd3ffa97f45ad71200344a",
+    "version": "1.6.2+hotfix.4"
+  },
+  "libwebrtc": {
+    "url": "https://github.com/webrtc-sdk/libwebrtc/releases/download/libwebrtc.m150.7871.05/libwebrtc-win-x64-release.zip",
+    "sha256": "93ceea2b6814f4f27c393a59c27e1529546232a3d54b7ff360942f502b92116f"
+  },
+  "innoSetup": {
+    "version": "6.7.3",
+    "url": "https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe",
+    "sha256": "9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732"
+  }
+}

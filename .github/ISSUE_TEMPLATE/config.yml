@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security / 安全漏洞
+    url: https://github.com/ChrisDong-THU/WebDesk/security/advisories/new
+    about: 请通过私密报告提交安全问题，不要公开连接凭据。

@@ -1,0 +1,42 @@
+{
+  "repository": "https://github.com/galaxy-s10/billd-desk-server",
+  "revision": "c73983e543341c08ce9e4fb7c52446be50b6c6a2",
+  "policy": "Original blocks with TypeScript types erased; auth, scoped rooms, legacy wire envelope and quiet logger supplied by WebDesk.",
+  "sources": [
+    {
+      "file": "src/config/websocket/index.ts",
+      "sha256": "b24a723661f38e589c4c922ea4368b7b8217a16b7923e95969477422d204ae87"
+    },
+    {
+      "file": "src/types/websocket.ts",
+      "sha256": "d169be1eaf75a3ef8c81c010f25d241d6962901e8078c5d5e485aae770567293"
+    }
+  ],
+  "blocks": [
+    {
+      "file": "src/types/websocket.ts",
+      "name": "WsMsgTypeEnum",
+      "sha256": "f3b572a3d3702bf42a55bed66bd458b2e6455d20e7bc3258630fd040455000ef"
+    },
+    {
+      "file": "src/config/websocket/index.ts",
+      "name": "socketEmit",
+      "sha256": "e0a9df75e91f5cb4ccaa6baaeeb38a29d8ecba180a2358f6ead08e13cdc29bc8"
+    },
+    {
+      "file": "src/config/websocket/index.ts",
+      "name": "WsMsgTypeEnum.nativeWebRtcOffer",
+      "sha256": "83d3c15194f1e7b48acb6614c45b96d4442f68475f8653a0377e7ef9261bdcd4"
+    },
+    {
+      "file": "src/config/websocket/index.ts",
+      "name": "WsMsgTypeEnum.nativeWebRtcAnswer",
+      "sha256": "2bf4fe70d358d34608eea3fe3a54bc0858a5615763b37ca0079cee7d7e4787ca"
+    },
+    {
+      "file": "src/config/websocket/index.ts",
+      "name": "WsMsgTypeEnum.nativeWebRtcCandidate",
+      "sha256": "2ab8f4c2213d8d5efee35655292f4b3ae3c3a0f7b62095a3adfbdd90fdeb79b7"
+    }
+  ]
+}

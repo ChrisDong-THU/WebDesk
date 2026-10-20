@@ -1,0 +1,27 @@
+node_modules/
+.tools/
+third_party/flutter-webrtc/
+desktop/flutter/.dart_tool/
+desktop/flutter/build/
+desktop/flutter/windows/flutter/ephemeral/
+desktop/flutter/.flutter-plugins-dependencies
+native/windows/bin/
+dist/
+flutter-release/
+server-release/
+test-results/
+.env
+
+# Local configuration, credentials and editor state
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+*.log
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+coverage/

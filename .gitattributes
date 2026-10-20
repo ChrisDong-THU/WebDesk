@@ -1,0 +1,10 @@
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.jpg binary
+*.exe binary
+
+# Preserve upstream snapshots, patch context and exact license hashes.
+third_party/** -whitespace
+third_party/licenses/** -text
+*.patch -whitespace

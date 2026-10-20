@@ -1,0 +1,185 @@
+diff --git a/common/cpp/include/flutter_webrtc.h b/common/cpp/include/flutter_webrtc.h
+index dc23f4c..787099a 100644
+--- a/common/cpp/include/flutter_webrtc.h
++++ b/common/cpp/include/flutter_webrtc.h
+@@ -13,6 +13,10 @@
+ 
+ #include "libwebrtc.h"
+ #include "rtc_logging.h"
++#ifdef _WIN32
++#include "secure_capture.h"
++#include "system_audio.h"
++#endif
+ 
+ namespace flutter_webrtc_plugin {
+ 
+@@ -43,6 +47,10 @@ class FlutterWebRTC : public FlutterWebRTCBase,
+                         std::unique_ptr<MethodResultProxy> result);
+ 
+  private:
++#ifdef _WIN32
++  std::map<std::string, std::unique_ptr<WebDeskSecureCapture>> secure_captures_;
++  std::map<std::string, std::unique_ptr<WebDeskSystemAudio>> system_audio_;
++#endif
+   void initLoggerCallback(RTCLoggingSeverity severity);
+   RTCLoggingSeverity str2LogSeverity(std::string str);
+ };
+diff --git a/common/cpp/src/flutter_peerconnection.cc b/common/cpp/src/flutter_peerconnection.cc
+index 5150fe2..35befa1 100644
+--- a/common/cpp/src/flutter_peerconnection.cc
++++ b/common/cpp/src/flutter_peerconnection.cc
+@@ -782,9 +782,28 @@ scoped_refptr<RTCRtpParameters> FlutterPeerConnection::updateRtpParameters(
+   EncodableList encodings = findList(newParameters, "encodings");
+   auto encoding = encodings.begin();
+   auto params = parameters->encodings();
++  std::vector<scoped_refptr<RTCRtpEncodingParameters>> updated_params;
+   for (auto param : params.std_vector()) {
+     if (encoding != encodings.end()) {
+       EncodableMap map = GetValue<EncodableMap>(*encoding);
++      // WebDesk Auto removes the application bitrate cap. The wrapper exposes
++      // no clear_max_bitrate operation: rebuild this encoding with the same
++      // identity and other fields, leaving only max_bitrate_bps unset.
++      if (findEncodableValue(map, "maxBitrate").IsNull()) {
++        auto fresh = RTCRtpEncodingParameters::Create();
++        if (param->ssrc()) fresh->set_ssrc(param->ssrc());
++        if (!param->rid().std_string().empty()) fresh->set_rid(param->rid());
++        fresh->set_active(param->active());
++        fresh->set_adaptive_ptime(param->adaptive_ptime());
++        fresh->set_bitrate_priority(param->bitrate_priority());
++        fresh->set_network_priority(param->network_priority());
++        if (param->min_bitrate_bps() > 0) fresh->set_min_bitrate_bps(param->min_bitrate_bps());
++        if (param->max_framerate() > 0) fresh->set_max_framerate(param->max_framerate());
++        if (param->num_temporal_layers() > 0) fresh->set_num_temporal_layers(param->num_temporal_layers());
++        if (param->scale_resolution_down_by() > 0) fresh->set_scale_resolution_down_by(param->scale_resolution_down_by());
++        if (!param->scalability_mode().std_string().empty()) fresh->set_scalability_mode(param->scalability_mode());
++        param = fresh;
++      }
+       EncodableValue value = findEncodableValue(map, "active");
+       if (!value.IsNull()) {
+         param->set_active(GetValue<bool>(value));
+@@ -833,9 +852,10 @@ scoped_refptr<RTCRtpParameters> FlutterPeerConnection::updateRtpParameters(
+       }
+       encoding++;
+     }
++    updated_params.push_back(param);
+   }
+   // encodings() returns copies, so the changes above must be written back.
+-  parameters->set_encodings(params);
++  parameters->set_encodings(updated_params);
+ 
+   EncodableValue value =
+       findEncodableValue(newParameters, "degradationPreference");
+diff --git a/common/cpp/src/flutter_webrtc.cc b/common/cpp/src/flutter_webrtc.cc
+index 3e75135..e6880df 100644
+--- a/common/cpp/src/flutter_webrtc.cc
++++ b/common/cpp/src/flutter_webrtc.cc
+@@ -46,6 +46,89 @@ void FlutterWebRTC::HandleMethodCall(
+   // initialize() with options, fall back to the default field trials.
+   EnsureWebRTCInitialized();
+ 
++#ifdef _WIN32
++  if (method_call.method_name() == "webdeskAudioCreate") {
++    if (!system_audio_.empty()) {
++      result->Error("AudioBusy", "System audio already belongs to a session"); return;
++    }
++    const auto id = GenerateUUID();
++    RTCAudioOptions options;
++    options.echo_cancellation = false;
++    options.auto_gain_control = false;
++    options.noise_suppression = false;
++    auto source = factory_->CreateAudioSource(id.c_str(), RTCAudioSource::SourceType::kCustom, options);
++    auto track = factory_->CreateAudioTrack(source, id.c_str());
++    auto stream = factory_->CreateStream(id.c_str());
++    stream->AddTrack(track);
++    local_streams_[id] = stream; local_tracks_[id] = track;
++    system_audio_[id] = std::make_unique<WebDeskSystemAudio>(source);
++    EncodableMap info;
++    info[EncodableValue("id")] = EncodableValue(id);
++    info[EncodableValue("label")] = EncodableValue(std::string("Windows system audio"));
++    info[EncodableValue("kind")] = EncodableValue(std::string("audio"));
++    info[EncodableValue("enabled")] = EncodableValue(true);
++    EncodableMap response;
++    response[EncodableValue("streamId")] = EncodableValue(id);
++    response[EncodableValue("audioTracks")] = EncodableValue(EncodableList{EncodableValue(info)});
++    response[EncodableValue("videoTracks")] = EncodableValue(EncodableList{});
++    result->Success(EncodableValue(response)); return;
++  }
++  if (method_call.method_name() == "webdeskAudioSetEnabled") {
++    const auto args = GetValue<EncodableMap>(*method_call.arguments());
++    auto it = system_audio_.find(findString(args, "id"));
++    if (it == system_audio_.end()) { result->Error("AudioClosed", "Audio session has ended"); return; }
++    try {
++      const bool enabled = findBoolean(args, "enabled");
++      it->second->SetEnabled(enabled);
++      result->Success(EncodableValue(enabled));
++    } catch (const std::exception& error) { result->Error("SystemAudio", error.what()); }
++    return;
++  }
++  if (method_call.method_name() == "webdeskAudioDispose") {
++    const auto args = GetValue<EncodableMap>(*method_call.arguments());
++    system_audio_.erase(findString(args, "id"));
++    result->Success(); return;
++  }
++  if (method_call.method_name() == "webdeskSecureStart") {
++    const auto args = GetValue<EncodableMap>(*method_call.arguments());
++    const int height = findInt(args, "height"), fps = findInt(args, "fps");
++    if (height < 360 || height > 4320 || fps < 1 || fps > 60 || !secure_captures_.empty()) {
++      result->Error("InvalidCapture", "Invalid or concurrent secure capture"); return;
++    }
++    const auto id = GenerateUUID();
++    auto stream = factory_->CreateStream(id.c_str());
++    auto source = factory_->CreateCustomVideoSource("webdesk-secure", ParseMediaConstraints(EncodableMap{}));
++    auto track = factory_->CreateVideoTrack(source, id.c_str());
++    try {
++      auto capture = std::make_unique<WebDeskSecureCapture>(source, height, fps);
++      stream->AddTrack(track);
++      local_streams_[id] = stream; local_tracks_[id] = track; video_sources_[id] = {source};
++      secure_captures_[id] = std::move(capture);
++      EncodableMap info;
++      info[EncodableValue("id")] = EncodableValue(id);
++      info[EncodableValue("label")] = EncodableValue(id);
++      info[EncodableValue("kind")] = EncodableValue(std::string("video"));
++      info[EncodableValue("enabled")] = EncodableValue(true);
++      EncodableMap response;
++      response[EncodableValue("streamId")] = EncodableValue(id);
++      response[EncodableValue("videoTracks")] = EncodableValue(EncodableList{EncodableValue(info)});
++      response[EncodableValue("audioTracks")] = EncodableValue(EncodableList{});
++      result->Success(EncodableValue(response));
++    } catch (const std::exception& error) { result->Error("SecureCapture", error.what()); }
++    return;
++  }
++  if (method_call.method_name() == "webdeskSecureStop") {
++    const auto args = GetValue<EncodableMap>(*method_call.arguments());
++    secure_captures_.erase(findString(args, "id"));
++    result->Success(); return;
++  }
++  if (method_call.method_name() == "webdeskSecureStatus") {
++    const auto args = GetValue<EncodableMap>(*method_call.arguments());
++    auto it = secure_captures_.find(findString(args, "id"));
++    result->Success(EncodableValue(it != secure_captures_.end() && it->second->healthy())); return;
++  }
++#endif
++
+   if (method_call.method_name().compare("createPeerConnection") == 0) {
+     if (!method_call.arguments()) {
+       result->Error("Bad Arguments", "Null arguments received");
+diff --git a/windows/CMakeLists.txt b/windows/CMakeLists.txt
+index bcf2fe6..aa1ee4a 100644
+--- a/windows/CMakeLists.txt
++++ b/windows/CMakeLists.txt
+@@ -36,6 +36,7 @@ add_library(${PLUGIN_NAME} SHARED
+ )
+ 
+ include_directories(
++  "${CMAKE_SOURCE_DIR}/../../../native/flutter"
+   "${CMAKE_CURRENT_SOURCE_DIR}"
+   "${CMAKE_CURRENT_SOURCE_DIR}/../common/cpp/include"
+   "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/svpng"
+@@ -43,6 +44,7 @@ include_directories(
+ )
+ 
+ apply_standard_settings(${PLUGIN_NAME})
++target_compile_options(${PLUGIN_NAME} PRIVATE /utf-8)
+ set_target_properties(${PLUGIN_NAME} PROPERTIES
+   CXX_VISIBILITY_PRESET hidden)
+ target_compile_definitions(${PLUGIN_NAME} PRIVATE FLUTTER_PLUGIN_IMPL)

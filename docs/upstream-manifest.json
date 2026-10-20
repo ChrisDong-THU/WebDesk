@@ -1,0 +1,286 @@
+{
+  "revision": "61be620eb35b0004dc66c296f0fdd8c62700b1b9",
+  "policy": "Core blocks are extracted verbatim. WebRTC ICE configuration is the only rewritten block; wrapper code supplies dependencies and deployment interfaces.",
+  "blocks": [
+    {
+      "file": "src/utils/index.ts",
+      "name": "handlConstraints",
+      "sha256": "70ca6245a519400149caa0bfddd002c281c384b6cdfc74e7d55fb42ed0ce16ed"
+    },
+    {
+      "file": "src/utils/index.ts",
+      "name": "setVideoTrackContentHints",
+      "sha256": "078db104e2bc1266840e5c190f7f5a8ee27670ab888917eeaf3660e4eb2aebc7"
+    },
+    {
+      "file": "src/utils/index.ts",
+      "name": "setAudioTrackContentHints",
+      "sha256": "1e82506eca8c1c912c720d20e88ab3ae4b3a321b8d502d376fbdc94104e2ef0c"
+    },
+    {
+      "file": "src/utils/index.ts",
+      "name": "createNullVideo",
+      "sha256": "6ec41e99976dac0213e50610337bca741055a7c0f98e92746e7a4a3363cad7b5"
+    },
+    {
+      "file": "src/utils/index.ts",
+      "name": "videoFullBox",
+      "sha256": "b7d4f2708be9d00309486ec1b62c9db47955207cfe289c7254082e7aed5445b9"
+    },
+    {
+      "file": "src/interface.ts",
+      "name": "LiveLineEnum",
+      "sha256": "15373b02840c08d181e4836989f271e9a9e4a9d32f59dc59a0e7e32bf1b95e70"
+    },
+    {
+      "file": "src/interface.ts",
+      "name": "LiveRenderEnum",
+      "sha256": "ec02f71548094eec66c200c42828868630384cd095fb04926dc21bdc5af46105"
+    },
+    {
+      "file": "src/interface.ts",
+      "name": "MediaTypeEnum",
+      "sha256": "b8a25b177071c972db4da0078da3f243a2e9a43441863190d233e8fe022abb41"
+    },
+    {
+      "file": "src/types/websocket.ts",
+      "name": "WsMsgTypeEnum",
+      "sha256": "f854b5d1c57e730d8f56844d23fb05767139c5b287032e72d937fab517a43930"
+    },
+    {
+      "file": "src/types/websocket.ts",
+      "name": "BilldDeskBehaviorEnum",
+      "sha256": "b3c890e8660ebff32f5191b2173588d4071a0642c60dcf365917071afe6f000c"
+    },
+    {
+      "file": "src/types/websocket.ts",
+      "name": "WsConnectStatusEnum",
+      "sha256": "b6498a2c6f5b29661d75a70ced515c5a3fc032cb50d092f65e7322f823d0a599"
+    },
+    {
+      "file": "src/event.ts",
+      "name": "IPC_EVENT",
+      "sha256": "e49fb62eb5b1e2ab512c337fa0ac424ee078a11b4ea9a2d19138b1fbb8677373"
+    },
+    {
+      "file": "src/constant.ts",
+      "name": "NUT_KEY_MAP",
+      "sha256": "8fc014f2324ccc1c391295a64d9a57ad7d3dbd046395313e8080fcea60678461"
+    },
+    {
+      "file": "src/hooks/use-rtcParams.ts",
+      "name": "useRTCParams",
+      "sha256": "1672e67cede9d7e33d9ec7c93d4efc849727a3912e8ddba343bb16309ebdf2cf"
+    },
+    {
+      "file": "src/store/app/index.ts",
+      "name": "useAppStore",
+      "sha256": "626a3cdf0187ddc8b09f3ad6465efc52bda243f37b8a0cf4c9ac1d267ddee813"
+    },
+    {
+      "file": "src/store/network/index.ts",
+      "name": "useNetworkStore",
+      "sha256": "266208adc296cba07e20172ca13988f56b7b8c89ce885aefb67cee5529f7531d"
+    },
+    {
+      "file": "src/utils/network/webRTC.ts",
+      "name": "WebRTCClass",
+      "sha256": "4f263b21e74b52105c5b1e92fe696e6161349020b43f6368d0bff4c52f03932b"
+    },
+    {
+      "file": "src/hooks/webrtc/remoteDesk.ts",
+      "name": "useWebRtcRemoteDesk",
+      "sha256": "65a33d28b359841fd9031ad12091b1dda73e6e44f1810f7cc0e50e0c7d0cb731"
+    },
+    {
+      "file": "src/hooks/use-websocket.ts",
+      "name": "remote-offer branch",
+      "sha256": "eed8f2f7532a23179d78e23ed522d42841bcafcdd29fdc799d7d46eca1d0a039"
+    },
+    {
+      "file": "src/hooks/use-websocket.ts",
+      "name": "WsMsgTypeEnum.nativeWebRtcAnswer",
+      "sha256": "e0d86c2f53e52f0ec4501d59172ebfa0fe84d4132d8af4556b5ed4fec110f371"
+    },
+    {
+      "file": "src/hooks/use-websocket.ts",
+      "name": "WsMsgTypeEnum.nativeWebRtcCandidate",
+      "sha256": "660546b1b0b374367c4eb6b063901d17c2d1af04a5a6eeba0b35ff25d803b4f9"
+    },
+    {
+      "file": "src/views/remote/index.vue",
+      "name": "handleDesktopStream",
+      "sha256": "2ffd0dc5ae193f36b7a77e2a9ebdb5fbbcd4bf1fed7cadf1bc1b7cb33b4aeed9"
+    },
+    {
+      "file": "src/views/remote/index.vue",
+      "name": "handleRTC",
+      "sha256": "f7d226d4ebe1f3b0a7eea0c791354ed776fa10573d149fd42b783b6920cb8a91"
+    },
+    {
+      "file": "src/views/remote/index.vue",
+      "name": "data-channel watch",
+      "sha256": "1f0b455c3d2273547af322869f514f20c49da468a01190dfd8bd71255c2e0f4e"
+    },
+    {
+      "file": "src/views/webrtc/index.vue",
+      "name": "currentMaxBitrate watch",
+      "sha256": "f80e3ea9b1fef355ea72fcdd70e496812c8627eddd7abb49bd0aa962e151a320"
+    },
+    {
+      "file": "src/views/webrtc/index.vue",
+      "name": "currentMaxFramerate watch",
+      "sha256": "ed7a047256b056150d477553cd99971ee57dd4238a9033496a125aac440bd5b4"
+    },
+    {
+      "file": "src/views/webrtc/index.vue",
+      "name": "currentResolutionRatio watch",
+      "sha256": "74159d5f88bb016d0af65b41b02c7f12e0a35ff7c3df8b186d13e1b58006ff76"
+    },
+    {
+      "file": "src/views/webrtc/index.vue",
+      "name": "currentVideoContentHint watch",
+      "sha256": "e1a05ab6c4b88f397da3b9275448f047b37b76952c9c72da2454cccfb6ec5ac6"
+    },
+    {
+      "file": "src/views/webrtc/index.vue",
+      "name": "handleMouseWheel",
+      "sha256": "303098b13158d19519ab1b11f1d546f55b4047dd8f3389ff4c83e637bb8f699f"
+    },
+    {
+      "file": "src/views/webrtc/index.vue",
+      "name": "handleKeyDown",
+      "sha256": "1ef84281e4130d108ca05cc7773bf66a6e31a521a0274d740b5f299798419e00"
+    },
+    {
+      "file": "src/views/webrtc/index.vue",
+      "name": "handleKeyUp",
+      "sha256": "631f833f0a13245526be3bd607d4a91cd9bd422a78a820fc09290c55f2fd4476"
+    },
+    {
+      "file": "src/views/webrtc/index.vue",
+      "name": "handleKeyCombination",
+      "sha256": "e44b0a970e2eccd7384292bcf364aebf886b5819a7b36ee6fdbdd404aab439f1"
+    },
+    {
+      "file": "src/views/webrtc/index.vue",
+      "name": "handleDoublelclick",
+      "sha256": "114f43f091edd5b9db44b2d6d693bf3afbeb0d5aeeb6cd146db476b857fee0c9"
+    },
+    {
+      "file": "src/views/webrtc/index.vue",
+      "name": "handleContextmenu",
+      "sha256": "c4269cb12b81d1ccbc3c18c8a7bbd2bcab85051614c85380ceb7aa7adbb66694"
+    },
+    {
+      "file": "src/views/webrtc/index.vue",
+      "name": "handleMouseDown",
+      "sha256": "08a93566eb6784a16209a45dc3f680932cb10720a8fd02b64f980750274671c3"
+    },
+    {
+      "file": "src/views/webrtc/index.vue",
+      "name": "handleMouseMove",
+      "sha256": "b598721a6dce87fb493947c736cd7b0d3272b7c6ba3b4f26d520c158d89d2920"
+    },
+    {
+      "file": "src/views/webrtc/index.vue",
+      "name": "handleMouseUp",
+      "sha256": "cb6c07451329b55f03a59f3a2f277685800ab90f254800122222eaa870ff27e6"
+    },
+    {
+      "file": "src/hooks/use-ipcRendererSend.ts",
+      "name": "useIpcRendererSend",
+      "sha256": "0972b5e7011a170d88a1074ce057a60872f7e46ceaaa5c6594772c04c88fc203"
+    },
+    {
+      "file": "electron-main/index.ts",
+      "name": "IPC_EVENT.mouseScrollDown",
+      "sha256": "5da23c04b3dffa18944282e580187196f40f7b8196efd515c0a1469784bb1c18"
+    },
+    {
+      "file": "electron-main/index.ts",
+      "name": "IPC_EVENT.mouseScrollUp",
+      "sha256": "9aa44f8e6f009c8b69524f9a6686f3cd634f78448654902d05eaea8ed30e6e37"
+    },
+    {
+      "file": "electron-main/index.ts",
+      "name": "IPC_EVENT.mouseScrollLeft",
+      "sha256": "24cd00a255e48f433c667239ae71b78a38609f9724e9fc4d28c9e463b750758c"
+    },
+    {
+      "file": "electron-main/index.ts",
+      "name": "IPC_EVENT.mouseScrollRight",
+      "sha256": "9701bdbab263d601059f775ec58c90d57573b25c6a718eca4357d2f0f8c11526"
+    },
+    {
+      "file": "electron-main/index.ts",
+      "name": "IPC_EVENT.mouseSetPosition",
+      "sha256": "a138991c97b4dfe58d72cee8c9879ab332005d402f372afea47d0664078406e2"
+    },
+    {
+      "file": "electron-main/index.ts",
+      "name": "IPC_EVENT.mouseMove",
+      "sha256": "884a25eb3b74f6de250939c37fd460a18259f9398eddf03b51b54e7430dd411a"
+    },
+    {
+      "file": "electron-main/index.ts",
+      "name": "IPC_EVENT.mouseDrag",
+      "sha256": "2b28aab030406280468eb1d6f9c59adb1febe39e2a4678b426d32bcee5181a1b"
+    },
+    {
+      "file": "electron-main/index.ts",
+      "name": "IPC_EVENT.keyboardType",
+      "sha256": "17d93dfcef27b86021df207c601d0090b9602040e9147f8de5fc7be107585cb6"
+    },
+    {
+      "file": "electron-main/index.ts",
+      "name": "IPC_EVENT.keyboardPressKey",
+      "sha256": "4585e8e788ce2cd12260c49421a2efc238388b086acea44d0bf8a975f85e3033"
+    },
+    {
+      "file": "electron-main/index.ts",
+      "name": "IPC_EVENT.keyboardReleaseKey",
+      "sha256": "085b19852fd9e5e0580ae404931442fee3f90e2da74cba1c1a24ecee38de2940"
+    },
+    {
+      "file": "electron-main/index.ts",
+      "name": "IPC_EVENT.mousePressButtonLeft",
+      "sha256": "0e02189df1ff48043e6d22dbc217a861bb3ba5b6c8acadce7d77023142a793a8"
+    },
+    {
+      "file": "electron-main/index.ts",
+      "name": "IPC_EVENT.mouseReleaseButtonLeft",
+      "sha256": "9b452fb0bad14299d6dd6bf7bdd84135d6262a439c6913399a2b24e61ab31af9"
+    },
+    {
+      "file": "electron-main/index.ts",
+      "name": "IPC_EVENT.mouseDoubleClick",
+      "sha256": "a3004a31e728c6d744de17008f759a9289ef887ae268910aedd8734011b7ffc2"
+    },
+    {
+      "file": "electron-main/index.ts",
+      "name": "IPC_EVENT.mouseLeftClick",
+      "sha256": "3093aed0b0148396b6911990cf93a21a3130dfd1c03a5cae8044631a42022937"
+    },
+    {
+      "file": "electron-main/index.ts",
+      "name": "IPC_EVENT.mouseRightClick",
+      "sha256": "07830713caae88a9de9f14a65f1fd9722e753d374fee2a47172310cadcd0b00d"
+    },
+    {
+      "file": "electron-main/index.ts",
+      "name": "IPC_EVENT.getScreenStream",
+      "sha256": "d0bdbb70a74174360d6fb1f9e9a405a632f8cebe918a2f2425685386b49ea63b"
+    },
+    {
+      "file": "electron-main/index.ts",
+      "name": "IPC_EVENT.scaleFactor",
+      "sha256": "adaafa2e4390b572f867ee31a792a60f4974205cf196cb642005b6c89131037a"
+    },
+    {
+      "file": "electron-main/index.ts",
+      "name": "IPC_EVENT.getPrimaryDisplaySize",
+      "sha256": "430c3857588e99a7408bda3eadeaa714cd77ef740f44652ff641ca6319df382d"
+    }
+  ]
+}
