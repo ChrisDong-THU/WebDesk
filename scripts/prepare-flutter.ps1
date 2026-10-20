@@ -19,6 +19,15 @@ function Ensure-Checkout($Spec, [string] $Directory) {
 $sdk = Join-Path $root '.tools\flutter'
 $plugin = Join-Path $root 'third_party\flutter-webrtc'
 Ensure-Checkout $manifest.flutter $sdk
+# Flutter derives its SDK version from tags, even when HEAD is pinned.
+$sdkTag = "refs/tags/$($manifest.flutter.version)"
+if (-not (& git -C $sdk tag --list $manifest.flutter.version)) {
+  Invoke-Git @('-C', $sdk, 'fetch', '--depth=1', 'origin', "${sdkTag}:${sdkTag}")
+}
+$tagCommit = & git -C $sdk rev-parse "${sdkTag}^{commit}"
+if ($LASTEXITCODE -ne 0 -or $tagCommit -ne $manifest.flutter.commit) {
+  throw 'Flutter release tag does not match the pinned commit'
+}
 Ensure-Checkout $manifest.flutterWebrtc $plugin
 $patch = Join-Path $root 'native\flutter\flutter-webrtc.patch'
 # A fresh checkout is expected to fail the reverse-patch probe. Windows
