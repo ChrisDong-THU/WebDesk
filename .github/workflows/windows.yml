@@ -12,6 +12,9 @@ on:
       - 'scripts/prepare-flutter.ps1'
       - 'scripts/test-flutter-task-runner.ps1'
       - 'scripts/test-tray.ps1'
+      - 'scripts/test-desktop-capture.ps1'
+      - 'tests/desktop-capture-regression.cc'
+      - 'tests/desktop-capture.BUILD.gn'
       - 'tests/tray-menu.cpp'
       - 'tests/task-runner-regression.cpp'
       - 'tests/remote-caption-buttons.cpp'
@@ -70,17 +73,14 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      # Only the immutable native artifact is cached, not the huge source tree.
-      # build-libwebrtc.ps1 still verifies recipe and both binary hashes.
-      - uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
-        with:
-          path: .tools/webrtc-build/external-audio
-          key: webrtc-win-x64-${{ hashFiles('native/flutter/dependencies.json', 'native/flutter/libwebrtc-external-audio.patch', 'scripts/build-libwebrtc.ps1') }}
+      # Capture regressions compile the actual native callback against WebRTC.
+      # A DLL-only cache lacks the source/toolchain needed by those checks;
+      # prepare the complete pinned build on each fresh installer runner.
       - run: ./scripts/setup-inno.ps1
       - run: npm run build:inno
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: native-media-${{ hashFiles('native/flutter/dependencies.json', 'native/flutter/libwebrtc-external-audio.patch', 'scripts/build-libwebrtc.ps1') }}
+          name: native-media-${{ hashFiles('native/flutter/dependencies.json', 'native/flutter/libwebrtc-external-audio.patch', 'native/flutter/libwebrtc-desktop-capture.patch', 'scripts/build-libwebrtc.ps1') }}
           path: .tools/webrtc-build/external-audio/*
           include-hidden-files: true
           if-no-files-found: error

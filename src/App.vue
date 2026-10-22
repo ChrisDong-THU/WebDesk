@@ -137,7 +137,7 @@ watch(remoteVisible, visible => {
         <span>{{ stats.path }}</span><span>{{ stats.width }} × {{ stats.height }}</span>
         <span>{{ stats.fps.toFixed(0) }} FPS</span><span>{{ (stats.bitrate / 1000).toFixed(2) }} Mbps</span>
         <span v-if="stats.codec" :title="stats.mediaDiagnostics">{{ stats.codec }}</span>
-        <span>{{ stats.rtt.toFixed(0) }} ms</span><span class="keyboard-tip">全屏时 <kbd>Esc</kbd> 释放键盘</span>
+        <span title="网络往返时间，不等于输入到画面的响应时间">RTT {{ stats.rtt.toFixed(0) }} ms</span><span class="keyboard-tip">全屏时 <kbd>Esc</kbd> 释放键盘</span>
       </footer>
       <div v-if="error" class="error-box" role="alert">{{ error }}</div>
     </section>

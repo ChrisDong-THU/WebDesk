@@ -56,13 +56,14 @@ async function handleRTC(receiver) {
       deskUserUuid: cacheStore.deskUserUuid,
       remoteDeskUserUuid: cacheStore.remoteDeskUserUuid,
     });
-    webRtcRemoteDesk.sendOffer({
+    await webRtcRemoteDesk.sendOffer({
       sender: mySocketId.value,
       receiver,
     });
   } catch (error) {
     console.log(error);
-  }
+  throw error;
+}
 }
 watch(
   () => networkStore.rtcMap,

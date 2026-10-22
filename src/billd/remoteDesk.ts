@@ -106,7 +106,8 @@ const useWebRtcRemoteDesk = () => {
       } catch (error) {
         console.error('remoteDesk的sendOffer错误');
         console.log(error);
-      }
+      throw error;
+}
     },
     /**
      * 观众收到主播的offer，观众回复主播answer
@@ -158,7 +159,8 @@ const useWebRtcRemoteDesk = () => {
       } catch (error) {
         console.error('remoteDesk的sendAnswer错误');
         console.log(error);
-      }
+      throw error;
+}
     },
   };
 

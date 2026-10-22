@@ -92,7 +92,7 @@ async function download() {
         </div>
         <div class="tool-setting"><span>帧率</span>
           <QualitySelect v-model="quality.maxFramerate" :disabled="!connected" label="实时帧率"
-            :options="[10, 20, 30, 60, 120].map(value => ({ value, label: `${value} FPS` }))" @open="closePanel()" />
+            :options="[10, 20, 30, 60].map(value => ({ value, label: `${value} FPS` }))" @open="closePanel()" />
         </div>
       </div>
       <span class="tool-divider" />

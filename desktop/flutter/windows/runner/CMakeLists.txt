@@ -20,8 +20,8 @@ add_executable(${BINARY_NAME} WIN32
 # that need different build settings.
 apply_standard_settings(${BINARY_NAME})
 get_directory_property(WEBDESK_FLUTTER_ENV DIRECTORY "${FLUTTER_MANAGED_DIR}" DEFINITION FLUTTER_TOOL_ENVIRONMENT)
-if("${WEBDESK_FLUTTER_ENV}" MATCHES "FLUTTER_TARGET=[^;]*audio_loopback[.]dart(;|$)")
-  # Isolated audio regression has no privileged service or input operations.
+if("${WEBDESK_FLUTTER_ENV}" MATCHES "FLUTTER_TARGET=[^;]*(audio_loopback|media_benchmark)[.]dart(;|$)")
+  # Isolated media regressions have no privileged service or input operations.
   target_compile_definitions(${BINARY_NAME} PRIVATE WEBDESK_AUDIO_TEST)
   target_link_options(${BINARY_NAME} PRIVATE "/MANIFESTUAC:level='asInvoker' uiAccess='false'")
 else()

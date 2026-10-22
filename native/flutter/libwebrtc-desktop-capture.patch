@@ -1,0 +1,131 @@
+diff --git a/src/internal/desktop_capturer.h b/src/internal/desktop_capturer.h
+index be024c8..dc30cdb 100644
+--- a/src/internal/desktop_capturer.h
++++ b/src/internal/desktop_capturer.h
+@@ -41,6 +41,9 @@ class ScreenCapturerTrackSource : public webrtc::VideoTrackSource {
+  public:
+   explicit ScreenCapturerTrackSource(scoped_refptr<RTCDesktopCapturer> capturer)
+       : VideoTrackSource(/*remote=*/false), capturer_(std::move(capturer)) {}
++  bool is_screencast() const override { return true; }
++  std::optional<bool> needs_denoising() const override { return false; }
++
+   virtual ~ScreenCapturerTrackSource() { capturer_->Stop(); }
+ 
+  private:
+diff --git a/src/rtc_desktop_capturer_impl.cc b/src/rtc_desktop_capturer_impl.cc
+index 9ebf17e..9682f71 100644
+--- a/src/rtc_desktop_capturer_impl.cc
++++ b/src/rtc_desktop_capturer_impl.cc
+@@ -16,6 +16,8 @@
+ 
+ #include "rtc_desktop_capturer_impl.h"
+ 
++#include <algorithm>
++#include <cstddef>
+ #include "api/sequence_checker.h"
+ #include "rtc_base/checks.h"
+ #include "third_party/libyuv/include/libyuv.h"
+@@ -177,52 +179,43 @@ void RTCDesktopCapturerImpl::OnCaptureResult(
+     return;
+   }
+ 
+-  int width = frame->size().width();
+-  int height = frame->size().height();
+-#ifdef WEBRTC_WIN
+-  webrtc::DesktopRect rect_ = webrtc::DesktopRect::MakeWH(width, height);
+-
+-  if (type_ != kScreen) {
+-    webrtc::GetWindowRect(reinterpret_cast<HWND>(source_id_), &rect_);
+-  }
+-
+-  __try
+-#endif
+-  {
+-    width = w_ > 0 ? w_ : width;
+-    height = h_ > 0 ? h_ : height;
+-    if (!i420_buffer_ || !i420_buffer_.get() ||
+-        i420_buffer_->width() * i420_buffer_->height() != width * height) {
+-      i420_buffer_ = webrtc::I420Buffer::Create(width, height);
+-    }
+-
+-    libyuv::ConvertToI420(frame->data(), 0, i420_buffer_->MutableDataY(),
+-                          i420_buffer_->StrideY(), i420_buffer_->MutableDataU(),
+-                          i420_buffer_->StrideU(), i420_buffer_->MutableDataV(),
+-                          i420_buffer_->StrideV(), x_, y_,
+-#ifdef WEBRTC_WIN
+-                          rect_.width(), rect_.height(),
+-#else
+-                          width, height,
+-#endif
+-                          width, height, libyuv::kRotate0, libyuv::FOURCC_ARGB);
+-
+-    OnFrame(webrtc::VideoFrame(i420_buffer_, 0, webrtc::TimeMillis(),
+-                               webrtc::kVideoRotation_0));
+-  }
+-#ifdef WEBRTC_WIN
+-  __except (filterException(GetExceptionCode(), GetExceptionInformation())) {
+-  }
+-#endif
++  if (result != webrtc::DesktopCapturer::Result::SUCCESS || !frame) return;
++  const int source_width = frame->size().width();
++  const int source_height = frame->size().height();
++  const int width = w_ > 0 ? static_cast<int>(w_) : source_width;
++  const int height = h_ > 0 ? static_cast<int>(h_) : source_height;
++  if (width <= 0 || height <= 0 || x_ > static_cast<uint32_t>(source_width) ||
++      y_ > static_cast<uint32_t>(source_height) ||
++      width > source_width - static_cast<int>(x_) ||
++      height > source_height - static_cast<int>(y_)) return;
++
++  // A delivered frame is retained by asynchronous encoders. Never overwrite it.
++  // A bounded pool reuses only unreferenced frames; overload drops capture rather
++  // than allocating an unbounded encoder backlog.
++  auto buffer = buffer_pool_.CreateI420Buffer(width, height);
++  if (!buffer) return;
++  const auto* pixels = frame->data() + static_cast<std::ptrdiff_t>(y_) * frame->stride() +
++                       static_cast<std::ptrdiff_t>(x_) * 4;
++  if (libyuv::ARGBToI420(pixels, frame->stride(),
++                        buffer->MutableDataY(), buffer->StrideY(),
++                        buffer->MutableDataU(), buffer->StrideU(),
++                        buffer->MutableDataV(), buffer->StrideV(), width, height) != 0) return;
++  OnFrame(webrtc::VideoFrame::Builder()
++              .set_video_frame_buffer(buffer)
++              .set_timestamp_us(webrtc::TimeMicros())
++              .set_rotation(webrtc::kVideoRotation_0)
++              .build());
+ }
+ 
+ void RTCDesktopCapturerImpl::CaptureFrame() {
+   RTC_DCHECK_RUN_ON(thread_.get());
+   if (capture_state_ == CS_RUNNING) {
++    const int64_t started = webrtc::TimeMillis();
+     capturer_->CaptureFrame();
+     thread_->PostDelayedHighPrecisionTask(
+         [this]() { CaptureFrame(); },
+-        webrtc::TimeDelta::Millis(capture_delay_));
++        webrtc::TimeDelta::Millis(std::max<int64_t>(
++            1, capture_delay_ - (webrtc::TimeMillis() - started))));
+   }
+ }
+ 
+diff --git a/src/rtc_desktop_capturer_impl.h b/src/rtc_desktop_capturer_impl.h
+index 4343754..3ce6008 100644
+--- a/src/rtc_desktop_capturer_impl.h
++++ b/src/rtc_desktop_capturer_impl.h
+@@ -17,7 +17,7 @@
+ #ifndef LIBWEBRTC_RTC_DESKTOP_CAPTURER_IMPL_HXX
+ #define LIBWEBRTC_RTC_DESKTOP_CAPTURER_IMPL_HXX
+ 
+-#include "api/video/i420_buffer.h"
++#include "common_video/include/video_frame_buffer_pool.h"
+ #include "api/video/video_frame.h"
+ #include "include/rtc_desktop_capturer.h"
+ #include "include/rtc_types.h"
+@@ -68,7 +68,7 @@ class RTCDesktopCapturerImpl : public RTCDesktopCapturer,
+   webrtc::DesktopCaptureOptions options_;
+   std::unique_ptr<webrtc::DesktopCapturer> capturer_;
+   std::unique_ptr<webrtc::Thread> thread_;
+-  webrtc::scoped_refptr<webrtc::I420Buffer> i420_buffer_;
++  webrtc::VideoFrameBufferPool buffer_pool_{false, 4};
+   CaptureState capture_state_ = CS_STOPPED;
+   DesktopType type_;
+   webrtc::DesktopCapturer::SourceId source_id_;

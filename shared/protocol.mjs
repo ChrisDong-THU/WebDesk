@@ -7,7 +7,8 @@ export const RESOLUTION_OPTIONS = Object.freeze([
   { label: '8K', value: 4320 },
 ]);
 // Upstream remote/index.vue selects 60 FPS; remoteDesk.newWebRtc leaves the
-// bitrate override unset. 0 keeps WebRTC's congestion control without an app cap.
+// bitrate override unset. 0 selects Auto; the native host sizes its ceiling to
+// output pixels/fps while WebRTC still controls the actual sending rate.
 export const DEFAULT_QUALITY = Object.freeze({ maxBitrate: 0, maxFramerate: 60, resolutionRatio: 4320, videoContentHint: 'detail' });
 export function validQuality(value) {
   return !!value && [0, 1000, 2000, 4000, 8000, 16000].includes(value.maxBitrate)

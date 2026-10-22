@@ -3,7 +3,7 @@
   "productName": "WebDesk",
   "description": "Browser-to-Windows remote desktop based on billd-desk",
   "author": "WebDesk contributors",
-  "version": "0.5.8",
+  "version": "0.5.9",
   "private": true,
   "type": "module",
   "license": "MIT",

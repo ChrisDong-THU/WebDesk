@@ -5,11 +5,13 @@ $spec = (Get-Content (Join-Path $root 'native\flutter\dependencies.json') -Raw |
 $buildRoot = Join-Path $root '.tools\webrtc-build'
 $artifact = Join-Path $buildRoot 'external-audio'
 $patch = Join-Path $root 'native\flutter\libwebrtc-external-audio.patch'
+$capturePatch = Join-Path $root 'native\flutter\libwebrtc-desktop-capture.patch'
 $recipe = @{
   wrapper = $spec.wrapperCommit
   engine = $spec.engineCommit
   depotTools = $spec.depotToolsCommit
   patch = (Get-FileHash -LiteralPath $patch -Algorithm SHA256).Hash
+  capturePatch = (Get-FileHash -LiteralPath $capturePatch -Algorithm SHA256).Hash
   script = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash
 }
 $recordPath = Join-Path $artifact 'build.json'
@@ -88,6 +90,7 @@ try {
     ApplyPatch $engine (Join-Path $wrapper "patches\$name")
   }
   ApplyPatch $wrapper $patch
+  ApplyPatch $wrapper $capturePatch
   & (Join-Path $depot 'gclient.bat') runhooks
   if ($LASTEXITCODE -ne 0) { throw 'WebRTC toolchain setup failed' }
   $python = & (Join-Path $depot 'vpython3.bat') -vpython-spec (Join-Path $engine '.vpython3') -c 'import sys; print(sys.executable)'

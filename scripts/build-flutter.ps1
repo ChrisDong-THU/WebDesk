@@ -17,6 +17,8 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'Release versions do not match' }
   & node scripts/build-native.cjs
   if ($LASTEXITCODE -ne 0) { throw 'Native build failed' }
+  & powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-desktop-capture.ps1
+  if ($LASTEXITCODE -ne 0) { throw 'Desktop capture regression failed' }
   # Exercise caption input and the patched Windows dispatcher before packaging.
   & powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-flutter-task-runner.ps1
   if ($LASTEXITCODE -ne 0) { throw 'WebRTC task runner regression failed' }

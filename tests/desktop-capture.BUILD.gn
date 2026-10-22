@@ -1,0 +1,15 @@
+import("//webrtc.gni")
+rtc_executable("desktop_capture_regression") {
+  testonly = true
+  sources = [ "desktop-capture-regression.cc",
+    "//libwebrtc/src/rtc_desktop_capturer_impl.cc",
+    "//libwebrtc/src/internal/video_capturer.cc",
+    "//libwebrtc/src/rtc_video_frame_impl.cc",
+    "//libwebrtc/src/base/portable.cc" ]
+  include_dirs = [ "//libwebrtc", "//libwebrtc/include" ]
+  defines = [ "RTC_DESKTOP_DEVICE", "WEBRTC_WIN" ]
+  suppressed_configs = [ "//build/config/clang:unsafe_buffers" ]
+  cflags = [ "-Wno-deprecated-declarations" ]
+  deps = [ "//api/video:video_frame", "//common_video", "//media:rtc_media_base",
+    "//modules/desktop_capture", "//rtc_base:threading", "//third_party/libyuv" ]
+}

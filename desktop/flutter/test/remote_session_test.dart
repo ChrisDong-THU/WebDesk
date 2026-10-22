@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:webdesk/native/desktop_bridge.dart';
@@ -36,9 +37,56 @@ class Channel extends Fake implements RTCDataChannel {
   }
 }
 
+class IncomingChannel extends Fake implements RTCDataChannel {
+  @override
+  String get label => 'MessageChannel';
+  @override
+  void Function(RTCDataChannelMessage)? onMessage;
+}
+
+class VideoTrack extends Fake implements MediaStreamTrack {
+  @override
+  String get kind => 'video';
+}
+
+class VideoSender extends Fake implements RTCRtpSender {
+  final firstWrite = Completer<void>(), release = Completer<void>();
+  final caps = <int?>[];
+  int active = 0, maximumActive = 0;
+  @override
+  MediaStreamTrack get track => VideoTrack();
+  @override
+  RTCRtpParameters get parameters =>
+      RTCRtpParameters(encodings: [RTCRtpEncoding()]);
+  @override
+  Future<bool> setParameters(RTCRtpParameters parameters) async {
+    active++;
+    if (active > maximumActive) maximumActive = active;
+    caps.add(parameters.encodings!.single.maxBitrate);
+    if (!firstWrite.isCompleted) {
+      firstWrite.complete();
+      await release.future;
+    }
+    active--;
+    return true;
+  }
+}
+
+class MediaPeer extends Peer {
+  MediaPeer(super.calls);
+  final sender = VideoSender();
+  @override
+  Future<void> setRemoteDescription(RTCSessionDescription description) async {}
+  @override
+  Future<List<RTCRtpSender>> getSenders() async => [sender];
+}
+
 class Peer extends Fake implements RTCPeerConnection {
   Peer(this.calls);
   final List<String> calls;
+  @override
+  RTCPeerConnectionState? get connectionState =>
+      RTCPeerConnectionState.RTCPeerConnectionStateDisconnected;
   @override
   void Function(RTCIceCandidate)? onIceCandidate;
   @override
@@ -119,6 +167,63 @@ void main() {
       await closing;
       expect(calls, ['peer dispose', 'peer close', 'release', 'bridge']);
       await expectLater(remote.start([]), throwsStateError);
+    },
+  );
+  test(
+    'temporary transport loss releases remote keys without closing the peer',
+    () async {
+      final calls = <String>[];
+      final pc = Peer(calls);
+      final remote = session(Bridge(calls), (_) async => pc);
+      // The fixture stops startup at tools creation, after state callbacks exist.
+      await expectLater(remote.start([]), throwsStateError);
+      pc.onConnectionState!(
+        RTCPeerConnectionState.RTCPeerConnectionStateDisconnected,
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(calls, ['release']);
+      await expectLater(remote.close(), throwsA(isA<CleanupException>()));
+    },
+  );
+  test(
+    'live quality waits for Answer parameters and teardown drains both',
+    () async {
+      final calls = <String>[];
+      final pc = MediaPeer(calls);
+      final bridge = Bridge(calls)
+        ..width = 1920
+        ..height = 1080;
+      final remote = session(bridge, (_) async => pc);
+      await expectLater(remote.start([]), throwsStateError);
+      final input = IncomingChannel();
+      pc.onDataChannel!(input);
+      final answer = remote.receive({
+        'msgType': 'nativeWebRtcAnswer',
+        'data': {
+          'sdp': {'type': 'answer', 'sdp': 'fixture'},
+        },
+      });
+      await pc.sender.firstWrite.future;
+      input.onMessage!(
+        RTCDataChannelMessage(
+          jsonEncode({
+            'msgType': 'changeMaxBitrate',
+            'data': {'val': 1000},
+          }),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        pc.sender.caps.length,
+        1,
+        reason: 'get/setParameters must be one transaction',
+      );
+      pc.sender.release.complete();
+      await answer;
+      await Future<void>.delayed(Duration.zero);
+      expect(pc.sender.caps, [12441600, 1000000]);
+      expect(pc.sender.maximumActive, 1);
+      await expectLater(remote.close(), throwsA(isA<CleanupException>()));
     },
   );
 }

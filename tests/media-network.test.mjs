@@ -1,0 +1,24 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import dgram from 'node:dgram';
+import { once } from 'node:events';
+import { MediaNetwork } from './media-network.cjs';
+test('media bottleneck forwards real UDP and imposes rate, delay and queue drops', {timeout:10000}, async t=>{
+  const host=dgram.createSocket('udp4'),client=dgram.createSocket('udp4');
+  const net=new MediaNetwork({mbps:.1,delayMs:20,queueMs:250});
+  t.after(()=>{host.close();client.close();net.close();net.close();});
+  host.bind(0,'127.0.0.1');await once(host,'listening');
+  client.bind(0,'127.0.0.1');await once(client,'listening');
+  const c=await net.candidate({candidate:`candidate:1 1 udp 123 127.0.0.1 ${host.address().port} typ host`,sdpMid:'0',sdpMLineIndex:0});
+  const port=Number(c.candidate.split(' ')[5]);
+  host.once('message',(_m,from)=>{for(let i=0;i<20;i++)host.send(Buffer.alloc(1000),from.port,from.address);});
+  const start=performance.now(),arrivals=[];
+  client.on('message',()=>arrivals.push(performance.now()-start));
+  client.send(Buffer.from('start'),port,'127.0.0.1');
+  await new Promise(r=>setTimeout(r,700));
+  assert.ok(arrivals.length>=3&&arrivals.length<=5,JSON.stringify(arrivals));
+  assert.ok(arrivals[0]>=100,JSON.stringify(arrivals));
+  assert.ok(arrivals.at(-1)-arrivals[0]>=150,JSON.stringify(arrivals));
+  assert.ok(net.metrics.dropped>=15);
+  assert.equal(net.metrics.packets,21);
+});

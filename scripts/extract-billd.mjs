@@ -37,6 +37,28 @@ function write(file, text) {
   if (check) { if (fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n') !== result) throw Error(`Upstream drift: ${file}`); }
   else { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, result); }
 }
+// SDP/ICE failures must reach the session owner instead of leaving a half-open
+// connection until the server timeout. Keep these adapters reproducible.
+function propagateSignalingErrors(code, names) {
+  const ast = ts.createSourceFile('adapter.ts', code, ts.ScriptTarget.Latest, true);
+  const insertions = [], found = new Set();
+  function visit(node) {
+    if ((ts.isPropertyDeclaration(node) || ts.isPropertyAssignment(node) || ts.isFunctionDeclaration(node)) && names.includes(node.name?.getText(ast))) {
+      found.add(node.name.getText(ast));
+      for (const statement of (node.body ?? node.initializer.body).statements) {
+        if (ts.isTryStatement(statement) && statement.catchClause) {
+          insertions.push(statement.catchClause.block.end - 1);
+        }
+      }
+      return;
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(ast);
+  if (found.size !== names.length || insertions.length !== names.length) throw Error('Missing signaling error adapter');
+  for (const position of insertions.sort((a, b) => b - a)) code = code.slice(0, position) + 'throw error;\n' + code.slice(position);
+  return code;
+}
 const utilsFile = 'src/utils/index.ts', hostFile = 'src/views/remote/index.vue', controlFile = 'src/views/webrtc/index.vue';
 write('src/billd/utils.ts', "import { computeBox } from 'billd-utils';\n" + ['handlConstraints', 'setVideoTrackContentHints', 'setAudioTrackContentHints', 'createNullVideo', 'videoFullBox'].map(n => block(utilsFile, n)).join('\n'));
 write('src/billd/enums.ts', ['LiveLineEnum', 'LiveRenderEnum', 'MediaTypeEnum'].map(n => block('src/interface.ts', n)).concat(['WsMsgTypeEnum', 'BilldDeskBehaviorEnum', 'WsConnectStatusEnum'].map(n => block('src/types/websocket.ts', n))).join('\n'));
@@ -53,8 +75,24 @@ const channelOptions = /('MessageChannel',\s*)\{[\s\S]*?\}/;
 if (!channelOptions.test(rtc)) throw Error('Missing upstream MessageChannel options');
 rtc = rtc.replace(channelOptions, '$1{ ordered: true }');
 rtc = withoutDebugLogs(rtc);
+rtc = propagateSignalingErrors(rtc, ['createOffer', 'createAnswer', 'addIceCandidate', 'setLocalDescription', 'setRemoteDescription']);
+// Disconnected can recover after a brief network interruption. The runtime
+// owns a bounded grace timer; failed still closes immediately upstream.
+const connectionAst = ts.createSourceFile('rtc.ts', rtc, ts.ScriptTarget.Latest, true);
+const disconnectRanges = [];
+function retainDisconnected(node) {
+  if (ts.isIfStatement(node) && ["iceConnectionState === 'disconnected'", "connectionState === 'disconnected'"].includes(node.expression.getText(connectionAst))) {
+    const close = node.thenStatement.statements.find(s => s.getText(connectionAst) === 'this.close();');
+    if (!close) throw Error('Missing disconnected close adapter');
+    disconnectRanges.push([close.getStart(connectionAst), close.end]);
+  }
+  ts.forEachChild(node, retainDisconnected);
+}
+retainDisconnected(connectionAst);
+if (disconnectRanges.length !== 2) throw Error('Missing disconnected handlers');
+for (const [start, end] of disconnectRanges.reverse()) rtc = rtc.slice(0, start) + '// Recovery timeout is owned by BilldDeskRuntime.' + rtc.slice(end);
 write('src/billd/webRTC.ts', "import { getRandomString } from 'billd-utils';\nimport { LiveLineEnum, MediaTypeEnum, WsMsgTypeEnum } from './enums';\nexport function createWebRTCClass(environment) {\nconst useAppStore = () => environment.appStore;\nconst useNetworkStore = () => environment.networkStore;\n" + rtc + '\nreturn WebRTCClass;\n}');
-write('src/billd/remoteDesk.ts', "import { ref } from 'vue';\nimport { getRandomString } from 'billd-utils';\nimport { useRTCParams } from './params';\nimport { WsMsgTypeEnum } from './enums';\nexport function createRemoteDesk(environment) {\nconst { WebRTCClass } = environment;\nconst useAppStore = () => environment.appStore;\nconst useNetworkStore = () => environment.networkStore;\n" + block('src/hooks/webrtc/remoteDesk.ts', 'useWebRtcRemoteDesk').replace('export const', 'const') + '\nreturn useWebRtcRemoteDesk();\n}');
+write('src/billd/remoteDesk.ts', "import { ref } from 'vue';\nimport { getRandomString } from 'billd-utils';\nimport { useRTCParams } from './params';\nimport { WsMsgTypeEnum } from './enums';\nexport function createRemoteDesk(environment) {\nconst { WebRTCClass } = environment;\nconst useAppStore = () => environment.appStore;\nconst useNetworkStore = () => environment.networkStore;\n" + propagateSignalingErrors(block('src/hooks/webrtc/remoteDesk.ts', 'useWebRtcRemoteDesk').replace('export const', 'const'), ['sendOffer', 'sendAnswer']) + '\nreturn useWebRtcRemoteDesk();\n}');
 
 // Retain the three original remote-desktop signaling handlers. The unrelated
 // live-streaming branches of the offer handler are excluded by AST selection.
@@ -73,13 +111,17 @@ for (const statement of signalInit.body.statements) {
     const body = record('src/hooks/use-websocket.ts', 'remote-offer branch', branch.getText(signalAst));
     code = `ws.socketIo.on(${event}, async (data) => {\n${body}\n});`;
   } else record('src/hooks/use-websocket.ts', event, code);
+  if (event.endsWith('nativeWebRtcCandidate')) code = code.replace('rtc?.addIceCandidate(data.candidate);', 'return rtc?.addIceCandidate(data.candidate);');
   signalBlocks.push(code);
 }
 write('src/billd/receive.ts', "import { createNullVideo } from './utils';\nimport { WsMsgTypeEnum } from './enums';\nexport function registerRemoteReceivers(environment) {\nconst { ws, networkStore, roomId, mySocketId, deskUserUuid, remoteDeskUserUuid, webRtcRemoteDesk, updateWebRtcRemoteDeskConfig } = environment;\nconst userStream = { value: undefined }, canvasVideoStream = { value: undefined };\n" + signalBlocks.join('\n') + '\n}');
 
 const hostAst = parse(hostFile);
 const inputWatch = hostAst.statements.find(n => n.expression && ts.isCallExpression(n.expression) && n.expression.expression.getText(hostAst) === 'watch' && n.getText(hostAst).includes('item.cbDataChannel.onmessage'));
-write('src/billd/host.ts', "import { watch } from 'vue';\nimport { handlConstraints as upstreamConstraints, setVideoTrackContentHints, setAudioTrackContentHints, createNullVideo } from './utils';\nimport { WsMsgTypeEnum } from './enums';\nexport function createHostPage(environment) {\nconst { appStore, networkStore, anchorStream, currentMaxBitrate, currentMaxFramerate, currentResolutionRatio, currentVideoContentHint, currentAudioContentHint, rtc, roomId, mySocketId, cacheStore, webRtcRemoteDesk, updateWebRtcRemoteDeskConfig, handleRtcBilldDeskBehavior } = environment;\nconst handlConstraints = environment.applyConstraints || upstreamConstraints;\nconst WINDOW_ID_ENUM = { remote: 1 };\n" + ['handleDesktopStream', 'handleRTC'].map(n => block(hostFile, n)).join('\n') + '\n' + record(hostFile, 'data-channel watch', inputWatch.getText(hostAst)) + '\nreturn { handleDesktopStream, handleRTC };\n}');
+write('src/billd/host.ts', "import { watch } from 'vue';\nimport { handlConstraints as upstreamConstraints, setVideoTrackContentHints, setAudioTrackContentHints, createNullVideo } from './utils';\nimport { WsMsgTypeEnum } from './enums';\nexport function createHostPage(environment) {\nconst { appStore, networkStore, anchorStream, currentMaxBitrate, currentMaxFramerate, currentResolutionRatio, currentVideoContentHint, currentAudioContentHint, rtc, roomId, mySocketId, cacheStore, webRtcRemoteDesk, updateWebRtcRemoteDeskConfig, handleRtcBilldDeskBehavior } = environment;\nconst handlConstraints = environment.applyConstraints || upstreamConstraints;\nconst WINDOW_ID_ENUM = { remote: 1 };\n" + ['handleDesktopStream', 'handleRTC'].map(n => {
+  const code = block(hostFile, n);
+  return n === 'handleRTC' ? propagateSignalingErrors(code.replace('webRtcRemoteDesk.sendOffer({', 'await webRtcRemoteDesk.sendOffer({'), [n]) : code;
+}).join('\n') + '\n' + record(hostFile, 'data-channel watch', inputWatch.getText(hostAst)) + '\nreturn { handleDesktopStream, handleRTC };\n}');
 
 const controllerNames = ['handleMouseWheel', 'handleKeyDown', 'handleKeyUp', 'handleKeyCombination', 'handleDoublelclick', 'handleContextmenu', 'handleMouseDown', 'handleMouseMove', 'handleMouseUp'];
 const controlAst = parse(controlFile);

@@ -61,7 +61,7 @@ ws.socketIo.on(
         if (data.receiver === mySocketId.value) {
           console.warn('是发给我的nativeWebRtcCandidate');
           const rtc = networkStore.rtcMap.get(data.sender);
-          rtc?.addIceCandidate(data.candidate);
+          return rtc?.addIceCandidate(data.candidate);
         } else {
           console.error('不是发给我的nativeWebRtcCandidate');
         }

@@ -174,7 +174,8 @@ class WebRTCClass {
     } catch (error) {
       this.prettierLog({ msg: 'createOffer失败', type: 'error' });
       console.error(error);
-    }
+    throw error;
+}
   };
 
   /** 创建answer */
@@ -188,7 +189,8 @@ class WebRTCClass {
     } catch (error) {
       this.prettierLog({ msg: 'createAnswer失败', type: 'error' });
       console.error(error);
-    }
+    throw error;
+}
   };
 
   /** 处理candidate */
@@ -200,7 +202,8 @@ class WebRTCClass {
     } catch (error) {
       this.prettierLog({ msg: 'addIceCandidate错误', type: 'error' });
       console.error(error);
-    }
+    throw error;
+}
   };
 
   /** 设置本地描述 */
@@ -213,7 +216,8 @@ class WebRTCClass {
     } catch (error) {
       this.prettierLog({ msg: 'setLocalDescription失败', type: 'error' });
       console.error(error);
-    }
+    throw error;
+}
   };
 
   /** 设置远端描述 */
@@ -226,7 +230,8 @@ class WebRTCClass {
     } catch (error) {
       this.prettierLog({ msg: 'setRemoteDescription失败', type: 'error' });
       console.error(error);
-    }
+    throw error;
+}
   };
 
   handleStreamEvent = () => {
@@ -410,7 +415,7 @@ class WebRTCClass {
             msg: 'iceConnectionState:disconnected',
             type: 'error',
           });
-          this.close();
+          // Recovery timeout is owned by BilldDeskRuntime.
         }
         if (iceConnectionState === 'closed') {
           // ICE 代理关闭，不再应答任何请求。
@@ -451,7 +456,7 @@ class WebRTCClass {
             msg: 'connectionState:disconnected',
             type: 'error',
           });
-          this.close();
+          // Recovery timeout is owned by BilldDeskRuntime.
         }
         if (connectionState === 'closed') {
           // 表示 RTCPeerConnection 已关闭。

@@ -11,6 +11,9 @@ import 'peer_connection.dart';
 import 'cleanup.dart';
 import 'input_queue.dart';
 import 'media_stats.dart';
+import 'serial_operations.dart';
+import 'video_policy.dart';
+import 'video_codecs.dart';
 
 class RemoteSession {
   RemoteSession({
@@ -45,7 +48,7 @@ class RemoteSession {
   ToolChannel? _tools;
   final _audio = SystemAudio();
   final _candidates = <RTCIceCandidate>[];
-  Future<void> _settings = Future.value();
+  final _settings = SerialOperations();
   Future<void>? _starting, _closing;
   Future<void> _signals = Future.value();
   final _mediaStats = MediaStats();
@@ -81,6 +84,11 @@ class RemoteSession {
       }
     };
     pc.onConnectionState = (state) {
+      if (_closed) return;
+      if (state == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
+        // A missed key-up must not leave keys held while ICE recovers.
+        unawaited(desktop.release().catchError(_fail));
+      }
       if (state == RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
         _fail(StateError('远程连接失败'));
       }
@@ -114,6 +122,15 @@ class RemoteSession {
     // Both tracks advertise the same stream so the upstream browser video
     // receives picture and sound together. No renegotiation on audio toggles.
     await pc.addTrack(audioStream.getAudioTracks().single, _stream!);
+    if (_closed) return;
+    try {
+      await preferDesktopCodecs(pc);
+    } catch (error) {
+      // Optional preference support must not prevent a compatible connection.
+      diagnostic?.call(
+        'Codec preference unavailable; using platform order: $error',
+      );
+    }
     if (_closed) return;
     await _applyParameters();
     final offer = await pc.createOffer({
@@ -167,6 +184,8 @@ class RemoteSession {
         'audio': false,
         'video': {
           'deviceId': {'exact': sources.first.id},
+          // Match billd-desk: do not composite the host cursor into the video.
+          'cursor': 'never',
           'frameRate': quality.fps,
           'mandatory': {'frameRate': quality.fps},
         },
@@ -197,10 +216,9 @@ class RemoteSession {
   }
 
   Future<void> _queueCapture() {
-    _settings = _settings.then((_) async {
+    return _settings.run(() async {
       if (!_closed) await _capture();
     });
-    return _settings;
   }
 
   Future<void> _applyParameters() async {
@@ -213,19 +231,13 @@ class RemoteSession {
     final parameters = sender.parameters;
     final encodings = parameters.encodings;
     if (encodings == null || encodings.isEmpty) return;
-    for (final encoding in encodings) {
-      if (encoding.minBitrate == 0) encoding.minBitrate = null;
-      if (encoding.scalabilityMode?.isEmpty ?? false) {
-        encoding.scalabilityMode = null;
-      }
-      encoding.maxBitrate = quality.bitrate == 0
-          ? null
-          : quality.bitrate * 1000;
-      encoding.maxFramerate = quality.fps;
-      encoding.scaleResolutionDownBy = _secureId != null
-          ? 1.0
-          : (desktop.height / quality.height).clamp(1.0, 16.0).toDouble();
-    }
+    configureVideoParameters(
+      parameters,
+      quality,
+      desktop.width,
+      desktop.height,
+      secure: _secureId != null,
+    );
     if (!await sender.setParameters(parameters)) throw StateError('无法应用画质设置');
   }
 
@@ -243,20 +255,23 @@ class RemoteSession {
         'changeMaxFramerate',
         'changeMaxBitrate',
         'changeResolutionRatio',
+        'changeVideoContentHint',
       ].contains(json['msgType'])) {
         final type = json['msgType'] as String;
         quality = quality.change(type, data['val']);
-        _settings = _settings
-            .then((_) async {
-              if (_closed) return;
-              if (type == 'changeMaxFramerate' ||
-                  (_secureId != null && type == 'changeResolutionRatio')) {
-                await _capture();
-              } else {
-                await _applyParameters();
-              }
-            })
-            .catchError(_fail);
+        unawaited(
+          _settings
+              .run(() async {
+                if (_closed) return;
+                if (type == 'changeMaxFramerate' ||
+                    (_secureId != null && type == 'changeResolutionRatio')) {
+                  await _capture();
+                } else {
+                  await _applyParameters();
+                }
+              })
+              .catchError(_fail),
+        );
       }
     } on FormatException {
       /* Invalid messages cannot invoke native operations. */
@@ -282,7 +297,7 @@ class RemoteSession {
         RTCSessionDescription(sdp['sdp'] as String, sdp['type'] as String),
       );
       _remoteSet = true;
-      await _applyParameters();
+      await _settings.run(_applyParameters);
       for (final candidate in _candidates) {
         await pc.addCandidate(candidate);
       }
@@ -351,7 +366,7 @@ class RemoteSession {
   Future<void> _close() async {
     // Set _closed first; in-flight creators either publish an owned resource or
     // dispose it themselves. Drain them before taking the final resource set.
-    for (final operation in [_starting, _signals, _settings]) {
+    for (final operation in [_starting, _signals, _settings.settled]) {
       try {
         await operation;
       } catch (_) {

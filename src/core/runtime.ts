@@ -13,13 +13,16 @@ import { validQuality } from '../../shared/protocol.mjs';
 import { DesktopTools, type ToolsOptions } from './tools';
 import { HostCapture } from './host-capture';
 import { bindControllerInput } from './controller-input';
+import { RemoteSignaling } from './signaling';
+import { monitorConnection } from './connection-health';
+import { ReceiverMediaStats } from './media-stats';
 import type { CaptureSource, NativeCommand } from '../../shared/desktop';
 export type { CaptureSource, NativeCommand } from '../../shared/desktop';
 
 export type Quality = { maxBitrate: number; maxFramerate: number; resolutionRatio: number; videoContentHint: string };
 export type Signal = { msgType: string; data: Record<string, any> };
 export type Stats = { fps: number; bitrate: number; rtt: number; width: number; height: number; path: string;
-  codec?: string; mediaDiagnostics?: string };
+  codec?: string; mediaDiagnostics?: string; decodeMs?: number; jitterBufferMs?: number; freezes?: number; dropped?: number };
 type Options = {
   role: 'host' | 'controller'; sessionId: string; iceServers: RTCIceServer[];
   container: HTMLElement; quality: Quality; onSignal: (signal: Signal) => void;
@@ -40,12 +43,15 @@ export class BilldDeskRuntime {
   private scope: EffectScope = effectScope();
   private hostPage: ReturnType<typeof createHostPage>;
   private callbacks = new Map<string, (data: any) => unknown>();
+  private signaling = new RemoteSignaling(
+    async signal => this.callbacks.get(signal.msgType)?.(signal.data),
+    () => !!this.peerConnection?.remoteDescription,
+  );
   private cleanup: Array<() => void> = [];
   private timer?: ReturnType<typeof setInterval>;
   private closed = false;
   private ready = false;
-  private lastBytes = 0;
-  private lastTime = 0;
+  private receiverStats = new ReceiverMediaStats();
   private sampling = false;
   private currentMaxFramerate;
   private currentMaxBitrate;
@@ -133,8 +139,12 @@ export class BilldDeskRuntime {
           const pc = rtc.peerConnection as RTCPeerConnection | null;
           if (!pc || observed.has(pc)) return;
           observed.add(pc);
+          this.cleanup.push(monitorConnection(pc, error => {
+            if (!this.closed) options.onError(error);
+          }));
           this.tools = new DesktopTools(pc, options.role, options.tools);
           const ready = () => {
+            if (pc.connectionState === 'disconnected') this.controllerInput?.reset();
             if (this.closed || this.ready || pc.connectionState !== 'connected' || rtc.dataChannel.readyState !== 'open') return;
             this.ready = true;
             // Explicit non-auto selection remains a UI option; default matches
@@ -191,7 +201,7 @@ export class BilldDeskRuntime {
     await this.hostPage.handleRTC(this.receiverId.value);
   }
   async receive(signal: Signal) {
-    if (!this.closed) await this.callbacks.get(signal.msgType)?.(signal.data);
+    if (!this.closed) await this.signaling.receive(signal);
   }
   releaseInput() {
     this.controllerInput?.release();
@@ -218,14 +228,15 @@ export class BilldDeskRuntime {
       else sizing.changeWrapSize(wrapSize);
     };
     video.addEventListener('loadedmetadata', resize);
+    video.addEventListener('resize', resize);
     const observer = new ResizeObserver(resize);
     observer.observe(this.options.container);
-    this.cleanup.push(() => { observer.disconnect(); video.removeEventListener('loadedmetadata', resize); });
+    this.cleanup.push(() => { observer.disconnect(); video.removeEventListener('loadedmetadata', resize); video.removeEventListener('resize', resize); });
   }
   private bindController() {
     this.controllerInput = bindControllerInput({
       area: this.options.container, window, document,
-      video: () => this.video, active: () => this.ready && !this.closed,
+      video: () => this.video, active: () => this.ready && !this.closed && this.peerConnection?.connectionState === 'connected',
       focused: () => document.activeElement === this.video,
       congested: () => (this.dataChannel?.bufferedAmount ?? 0) > 16 * 1024,
       send: data => this.rtc?.dataChannelSend({
@@ -243,14 +254,8 @@ export class BilldDeskRuntime {
     try {
     const reports = await pc.getStats();
     const stats: Stats = { fps: 0, bitrate: 0, rtt: 0, width: 0, height: 0, path: '协商中', codec: '', mediaDiagnostics: '' };
+    Object.assign(stats, this.receiverStats.sample(reports));
     reports.forEach(report => {
-      if (report.type === 'inbound-rtp' && report.kind === 'video') {
-        stats.fps = report.framesPerSecond || 0;
-        stats.width = report.frameWidth || 0; stats.height = report.frameHeight || 0;
-        stats.codec = reports.get(report.codecId)?.mimeType?.replace('video/', '') ?? '';
-        if (this.lastTime && report.timestamp > this.lastTime) stats.bitrate = Math.max(0, (report.bytesReceived - this.lastBytes) * 8 / (report.timestamp - this.lastTime));
-        this.lastBytes = report.bytesReceived; this.lastTime = report.timestamp;
-      }
       if (report.type === 'transport' && report.selectedCandidatePairId) {
         const pair = reports.get(report.selectedCandidatePairId);
         if (!pair) return;
@@ -266,6 +271,8 @@ export class BilldDeskRuntime {
         stats.mediaDiagnostics = `编码器：${media.encoder || '未报告'}；编码耗时：${encode}；质量限制：${media.qualityLimit || '未报告'}；采集：${media.capture === 'secure' ? '安全桌面' : '普通桌面'}`;
       } catch { stats.mediaDiagnostics = '暂时无法获取远程媒体统计'; }
     }
+    const duration = (value: number | undefined) => value === undefined ? '未报告' : `${value.toFixed(1)} ms`;
+    stats.mediaDiagnostics += `；解码：${duration(stats.decodeMs)}；接收缓冲：${duration(stats.jitterBufferMs)}；本周期冻结：${stats.freezes ?? '未报告'}`;
     if (!this.closed) this.options.onStats(stats);
     } finally { this.sampling = false; }
   }
@@ -273,6 +280,7 @@ export class BilldDeskRuntime {
     if (this.closed) return;
     this.controllerInput?.release();
     this.closed = true;
+    this.signaling.close();
     this.capture?.stop();
     clearInterval(this.timer);
     this.scope.stop();
