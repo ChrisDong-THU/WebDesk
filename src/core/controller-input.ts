@@ -6,28 +6,45 @@ type Behavior = { type: number; key?: number[]; x?: number; y?: number; amount?:
 
 /** One path for physical input. Click/dblclick/contextmenu never inject clicks. */
 export function bindControllerInput(options: {
-  area: EventTarget; window: EventTarget;
+  area: EventTarget;
+  window: EventTarget;
   document: EventTarget & Pick<Document, 'hidden' | 'fullscreenElement' | 'exitFullscreen'>;
-  video: () => HTMLVideoElement | undefined; active: () => boolean;
-  focused: () => boolean; congested: () => boolean; send: (data: Behavior) => void;
+  video: () => HTMLVideoElement | undefined;
+  active: () => boolean;
+  focused: () => boolean;
+  congested: () => boolean;
+  send: (data: Behavior) => void;
 }) {
   const removers: Array<() => void> = [];
   const bind = <K extends keyof DocumentEventMap>(
-    target: EventTarget, type: K, handler: (event: DocumentEventMap[K]) => void,
+    target: EventTarget,
+    type: K,
+    handler: (event: DocumentEventMap[K]) => void,
   ) => {
     target.addEventListener(type, handler as EventListener, { passive: false });
     removers.push(() => target.removeEventListener(type, handler as EventListener));
   };
   let dirty = false;
-  const send = (data: Behavior) => { dirty = true; options.send(data); };
+  const send = (data: Behavior) => {
+    dirty = true;
+    options.send(data);
+  };
   const keyboard = createKeyboardInput(send);
   const wheel = createWheelNormalizer();
   const position = (event: PointerSample) => {
     const rect = options.video()?.getBoundingClientRect();
-    if (!rect || rect.width <= 0 || rect.height <= 0 ||
-        !Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return undefined;
-    return { x: Math.max(0, Math.min(1000, (event.clientX - rect.left) * 1000 / rect.width)),
-      y: Math.max(0, Math.min(1000, (event.clientY - rect.top) * 1000 / rect.height)) };
+    if (
+      !rect ||
+      rect.width <= 0 ||
+      rect.height <= 0 ||
+      !Number.isFinite(event.clientX) ||
+      !Number.isFinite(event.clientY)
+    )
+      return undefined;
+    return {
+      x: Math.max(0, Math.min(1000, ((event.clientX - rect.left) * 1000) / rect.width)),
+      y: Math.max(0, Math.min(1000, ((event.clientY - rect.top) * 1000) / rect.height)),
+    };
   };
   const move = (event: PointerSample) => {
     const point = position(event);
@@ -40,19 +57,29 @@ export function bindControllerInput(options: {
     keyboard.syncModifiers(event);
     send({ type: (up ? [4, 19, 5] : [2, 18, 3])[event.button] });
   };
-  const reset = () => { pointer.reset(); keyboard.reset(); wheel.reset(); dirty = false; };
+  const reset = () => {
+    pointer.reset();
+    keyboard.reset();
+    wheel.reset();
+    dirty = false;
+  };
   const release = () => {
     const needsRelease = dirty;
     reset();
     if (needsRelease && options.active()) options.send({ type: 17 });
   };
   const pointer = bindPointerInput({
-    ...options, down: event => button(event, false), move,
-    up: event => button(event, true), cancel: release,
+    ...options,
+    down: (event) => button(event, false),
+    move,
+    up: (event) => button(event, true),
+    cancel: release,
   });
   const onVideo = (event: MouseEvent) => options.active() && event.target === options.video();
   for (const type of ['click', 'dblclick', 'contextmenu', 'auxclick', 'dragstart'] as const) {
-    bind(options.area, type, (event: MouseEvent) => { if (onVideo(event)) event.preventDefault(); });
+    bind(options.area, type, (event: MouseEvent) => {
+      if (onVideo(event)) event.preventDefault();
+    });
   }
   bind(options.area, 'wheel', (event: WheelEvent) => {
     if (!onVideo(event)) return;
@@ -70,7 +97,10 @@ export function bindControllerInput(options: {
   };
   let wasFullscreen = fullscreen();
   let localEscape = false;
-  const releaseFocus = () => { release(); options.video()?.blur(); };
+  const releaseFocus = () => {
+    release();
+    options.video()?.blur();
+  };
   // Browsers may consume Escape before dispatching keydown to the page.
   bind(options.document, 'fullscreenchange', () => {
     const current = fullscreen();
@@ -103,6 +133,16 @@ export function bindControllerInput(options: {
   }
   bind(options.area, 'focusout', release);
   bind(options.window, 'blur', release);
-  bind(options.document, 'visibilitychange', () => { if (options.document.hidden) release(); });
-  return { reset, release, dispose: () => { reset(); pointer.dispose(); removers.forEach(remove => remove()); } };
+  bind(options.document, 'visibilitychange', () => {
+    if (options.document.hidden) release();
+  });
+  return {
+    reset,
+    release,
+    dispose: () => {
+      reset();
+      pointer.dispose();
+      removers.forEach((remove) => remove());
+    },
+  };
 }

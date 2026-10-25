@@ -6,8 +6,14 @@ import { createPasswordHasher } from '../server/password-hash.mjs';
 test('async hashes preserve credentials and reject excess work without blocking timers', async () => {
   const hash = createPasswordHasher({ concurrency: 1, queueLimit: 1 });
   let timerRan = false;
-  const timer = new Promise(resolve => setTimeout(() => { timerRan = true; resolve(); }, 0));
-  const first = hash('secret', 'salt'), second = hash('next', 'salt');
+  const timer = new Promise((resolve) =>
+    setTimeout(() => {
+      timerRan = true;
+      resolve();
+    }, 0),
+  );
+  const first = hash('secret', 'salt'),
+    second = hash('next', 'salt');
   await assert.rejects(hash('excess', 'salt'), /繁忙/);
   const result = await first;
   assert.equal(timerRan, true);

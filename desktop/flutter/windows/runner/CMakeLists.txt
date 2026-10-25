@@ -20,9 +20,12 @@ add_executable(${BINARY_NAME} WIN32
 # that need different build settings.
 apply_standard_settings(${BINARY_NAME})
 get_directory_property(WEBDESK_FLUTTER_ENV DIRECTORY "${FLUTTER_MANAGED_DIR}" DEFINITION FLUTTER_TOOL_ENVIRONMENT)
-if("${WEBDESK_FLUTTER_ENV}" MATCHES "FLUTTER_TARGET=[^;]*(audio_loopback|media_benchmark)[.]dart(;|$)")
-  # Isolated media regressions have no privileged service or input operations.
+if("${WEBDESK_FLUTTER_ENV}" MATCHES "FLUTTER_TARGET=[^;]*(audio_loopback|media_benchmark|file_selection_smoke)[.]dart(;|$)")
+  # Isolated regressions have no privileged service or input operations.
   target_compile_definitions(${BINARY_NAME} PRIVATE WEBDESK_AUDIO_TEST)
+  if("${WEBDESK_FLUTTER_ENV}" MATCHES "FLUTTER_TARGET=[^;]*file_selection_smoke[.]dart(;|$)")
+    target_compile_definitions(${BINARY_NAME} PRIVATE WEBDESK_FILE_SELECTION_TEST)
+  endif()
   target_link_options(${BINARY_NAME} PRIVATE "/MANIFESTUAC:level='asInvoker' uiAccess='false'")
 else()
   target_link_options(${BINARY_NAME} PRIVATE "/MANIFESTUAC:level='requireAdministrator' uiAccess='false'")
@@ -42,7 +45,7 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "NOMINMAX")
 # Add dependency libraries and include directories. Add any application-specific
 # dependencies here.
 target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)
-target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib")
+target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib" "ole32.lib" "uuid.lib")
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
 # Run the Flutter tool portions of the build. This must not be removed.

@@ -1,8 +1,16 @@
 /** Allow transient ICE loss, but never leave a dead session looking connected. */
-export function monitorConnection(pc: RTCPeerConnection, onFailure: (error: Error) => void,
-  graceMs = 15000): () => void {
-  let timer: ReturnType<typeof setTimeout> | undefined, stopped = false;
-  const cancel = () => { clearTimeout(timer); timer = undefined; };
+export function monitorConnection(
+  pc: RTCPeerConnection,
+  onFailure: (error: Error) => void,
+  graceMs = 15000,
+  failedGraceMs = 0,
+): () => void {
+  let timer: ReturnType<typeof setTimeout> | undefined,
+    stopped = false;
+  const cancel = () => {
+    clearTimeout(timer);
+    timer = undefined;
+  };
   const fail = (message: string) => {
     if (stopped) return;
     dispose();
@@ -11,16 +19,23 @@ export function monitorConnection(pc: RTCPeerConnection, onFailure: (error: Erro
   const changed = () => {
     if (stopped) return;
     const states = [pc.connectionState, pc.iceConnectionState];
-    if (states.includes('failed') || states.includes('closed')) {
+    if (states.includes('closed')) {
       fail('远程连接已中断，请重新连接');
+    } else if (states.includes('failed')) {
+      if (!failedGraceMs) fail('远程连接已中断，请重新连接');
+      else timer ??= setTimeout(() => fail('网络连接恢复失败，请重新连接'), failedGraceMs);
     } else if (states.includes('disconnected')) {
       timer ??= setTimeout(() => fail('网络连接未恢复，请重新连接'), graceMs);
-    } else if (pc.connectionState === 'connected' && ['connected', 'completed'].includes(pc.iceConnectionState)) {
+    } else if (
+      pc.connectionState === 'connected' &&
+      ['connected', 'completed'].includes(pc.iceConnectionState)
+    ) {
       cancel();
     }
   };
   const dispose = () => {
-    stopped = true; cancel();
+    stopped = true;
+    cancel();
     pc.removeEventListener('connectionstatechange', changed);
     pc.removeEventListener('iceconnectionstatechange', changed);
   };

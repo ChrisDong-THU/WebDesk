@@ -3,7 +3,7 @@
   "productName": "WebDesk",
   "description": "Browser-to-Windows remote desktop based on billd-desk",
   "author": "WebDesk contributors",
-  "version": "0.5.9",
+  "version": "0.6.1",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -31,7 +31,11 @@
     "test:windows": "node scripts/run-electron.cjs scripts/test-windows.cjs",
     "preview": "vite preview --host 127.0.0.1",
     "upstream:check": "node scripts/extract-billd.mjs --check && node scripts/extract-billd-server.mjs --check",
-    "pretest": "npm run build"
+    "pretest": "npm run build",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test:codecs": "node scripts/run-electron.cjs scripts/test-video-codecs.cjs",
+    "test:codec-ui": "node scripts/run-electron.cjs scripts/test-codec-ui.cjs"
   },
   "dependencies": {
     "@nut-tree-fork/shared": "4.2.2",
@@ -42,14 +46,15 @@
     "vue": "3.5.13"
   },
   "devDependencies": {
+    "@nut-tree-fork/nut-js": "4.2.2",
     "@types/node": "22.10.2",
     "@vitejs/plugin-vue": "5.2.1",
     "electron": "33.2.1",
     "esbuild": "0.24.2",
+    "prettier": "3.9.10",
     "typescript": "5.7.2",
     "vite": "6.0.3",
-    "vue-tsc": "2.1.10",
-    "@nut-tree-fork/nut-js": "4.2.2"
+    "vue-tsc": "2.1.10"
   },
   "repository": {
     "type": "git",

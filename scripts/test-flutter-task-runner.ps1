@@ -49,6 +49,18 @@ try {
     if ($process.ExitCode -ne 0) { throw "Remote caption regression failed: $($process.ExitCode)" }
     Get-Content -LiteralPath (Join-Path $out 'caption.txt')
     $process.Dispose()
+    & cl.exe /nologo /EHsc /std:c++17 /W4 /WX /DUNICODE /D_UNICODE "/I$root\desktop\flutter\windows\runner" "/I$Plugin\windows" "/I$Plugin\common\cpp\include" "$root\tests\file-dialog-regression.cpp" "$Plugin\windows\task_runner_windows.cc" /Fe:file-dialog-test.exe /link user32.lib ole32.lib uuid.lib
+    if ($LASTEXITCODE -ne 0) { throw 'File dialog regression build failed' }
+    $process = Start-Process -FilePath (Join-Path $out 'file-dialog-test.exe') -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $out 'file-dialog.txt')
+    $null = $process.Handle
+    if (-not $process.WaitForExit(15000)) {
+      $process.Kill()
+      $process.WaitForExit()
+      throw 'File dialog caption handling deadlocked'
+    }
+    if ($process.ExitCode -ne 0) { throw "File dialog regression failed: $($process.ExitCode)" }
+    Get-Content -LiteralPath (Join-Path $out 'file-dialog.txt')
+    $process.Dispose()
     & cl.exe /nologo /EHsc /std:c++17 /W4 /WX /DUNICODE /D_UNICODE "$root\tests\flutter-window-probe.cpp" /Fe:flutter-window-probe.exe /link user32.lib
     if ($LASTEXITCODE -ne 0) { throw 'Flutter window probe build failed' }
   }

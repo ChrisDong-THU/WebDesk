@@ -6,7 +6,7 @@
 
 1. 阅读 [开发指南](docs/development.md)，了解架构与上游代码边界。
 2. 从 `main` 新建分支，遵循 `.editorconfig` 和现有代码风格。
-3. 运行 `npm test`、`npm run build`、`npm run release:check`。修改 Flutter 时另运行 `flutter analyze`、`flutter test`；涉及原生输入或采集的修改须提供 Windows 实测情况。
+3. 运行 `npm run format:check`、`npm test`、`npm run release:check`。修改 Flutter 时另运行 `dart format --output=none --set-exit-if-changed lib test test_driver`、`flutter analyze`、`flutter test`；涉及原生输入或采集的修改须提供 Windows 实测情况。
 4. 在 PR 中描述问题、修改后行为和实际验证结果；界面修改附无敏感信息的截图。
 
 不要提交凭据、`.env`、SDK 缓存、node_modules、安装包、部署日志或真实设备连接信息。二进制交付放在 Release。
@@ -19,5 +19,7 @@
 - 原生服务以 LocalSystem 运行。修改权限、管道校验、桌面绑定、会话退出时，必须说明权限边界和失败时的清理行为。
 
 新增依赖应说明必要性、许可证和对安装包体积的影响。提交贡献即表示你有权按本项目 MIT 许可贡献该代码；第三方代码须保留其许可证与来源。
+
+项目自有 TypeScript、Vue、CSS、JavaScript 和配置使用固定版本的 Prettier，可运行 `npm run format` 修正格式。Prettier 采用 MIT 许可，仅作为开发依赖，不进入客户端或服务器运行包。生成的上游源码、Dart/原生代码和历史取证记录不由该命令改写。
 
 请尊重参与者，围绕代码和可复现事实讨论，不发布他人的私人信息。

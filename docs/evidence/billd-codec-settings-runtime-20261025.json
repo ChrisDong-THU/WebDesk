@@ -1,0 +1,58 @@
+{
+  "version": "0.609.0",
+  "remoteSettings": {
+    "minBitrateMbps": 1,
+    "resolution": "1080P",
+    "network": "低延迟",
+    "maxBitrateMbps": 100,
+    "fps": 60,
+    "degradation": "保分辨率"
+  },
+  "target": "D:\\BilldDesk\\BilldDesk.exe",
+  "hardwareSettings": {
+    "hardwareDecode": true,
+    "encoderVendors": [
+      "NVIDIA显卡",
+      "AMD显卡"
+    ],
+    "decoderVendors": [
+      "NVIDIA显卡",
+      "AMD显卡"
+    ],
+    "hardwareEncode": true,
+    "encodeZeroCopy": true,
+    "path": "设置 > 硬件加速设置"
+  },
+  "observedAt": "2026-10-25T16:10:43.6242375+08:00",
+  "codecSettings": {
+    "path": "设置 > 远程设置 > 编解码格式",
+    "visibleOrder": [
+      "H265",
+      "H264",
+      "AV1",
+      "VP9",
+      "VP8",
+      "opus",
+      "G722",
+      "PCMU",
+      "PCMA",
+      "CN"
+    ],
+    "control": "checkbox list",
+    "note": "current local configuration, not asserted factory default; no settings changed",
+    "videoChecked": [
+      "H265",
+      "H264",
+      "AV1",
+      "VP9",
+      "VP8"
+    ]
+  },
+  "method": "Computer Use @oai/sky actual existing process; window billd_desk_flutter_pro; read-only settings navigation",
+  "limitations": [
+    "No Billd remote session or media SDP captured",
+    "UI configuration cannot prove automatic performance scoring or runtime codec selection",
+    "Accessibility and screenshot observation, not REA runtime capture",
+    "No authentication or credential extraction and no setting toggles"
+  ]
+}

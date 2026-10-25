@@ -2,8 +2,71 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:webdesk/protocol/quality.dart';
 import 'package:webdesk/session/video_policy.dart';
+import 'package:webdesk/session/adaptive_video.dart';
 
 void main() {
+  test(
+    'capture-side scaling and sender ceilings never apply resolution twice',
+    () {
+      final output = captureOutputSize(3840, 2160, 1080);
+      expect(output, (width: 1920, height: 1080));
+      expect(captureOutputSize(1920, 1080, 4320), (width: 1920, height: 1080));
+      final parameters = RTCRtpParameters(encodings: [RTCRtpEncoding()]);
+      configureVideoParameters(
+        parameters,
+        const Quality(height: 1080),
+        output.width,
+        output.height,
+      );
+      expect(parameters.encodings!.single.scaleResolutionDownBy, 1);
+      expect(captureOutputSize(1919, 1079, 720), (width: 1280, height: 720));
+    },
+  );
+  test(
+    'degradation modes respect explicit user ceilings and recover exactly',
+    () {
+      final parameters = RTCRtpParameters(encodings: [RTCRtpEncoding()]);
+      const adaptation = VideoAdaptation(
+        cpuSteps: 2,
+        networkSteps: 1,
+        networkBitrate: 700000,
+      );
+      for (final mode in [
+        'maintain-framerate',
+        'maintain-resolution',
+        'balanced',
+        'disabled',
+      ]) {
+        final quality = Quality(
+          height: 1080,
+          fps: 30,
+          bitrate: 1000,
+          degradationPreference: mode,
+        );
+        configureVideoParameters(
+          parameters,
+          quality,
+          3840,
+          2160,
+          adaptation: adaptation,
+        );
+        final encoding = parameters.encodings!.single;
+        expect(encoding.maxBitrate, 700000);
+        expect(encoding.maxFramerate, lessThanOrEqualTo(30));
+        expect(encoding.scaleResolutionDownBy, greaterThanOrEqualTo(2));
+        if (mode == 'maintain-framerate' || mode == 'disabled') {
+          expect(encoding.maxFramerate, 30);
+        }
+        if (mode == 'maintain-resolution' || mode == 'disabled') {
+          expect(encoding.scaleResolutionDownBy, 2);
+        }
+        configureVideoParameters(parameters, quality, 3840, 2160);
+        expect(encoding.maxBitrate, 1000000);
+        expect(encoding.maxFramerate, 30);
+        expect(encoding.scaleResolutionDownBy, 2);
+      }
+    },
+  );
   test('Auto grows with output pixels and fps but stays bounded', () {
     final hd = videoBitrateLimit(const Quality(), 1920, 1080);
     final uhd = videoBitrateLimit(const Quality(), 3840, 2160);
@@ -99,6 +162,9 @@ void main() {
         'maxFramerate': 30,
         'maxBitrate': 1000,
         'videoContentHint': 'text',
+        'degradationPreference': 'auto',
+        'networkMode': 'auto',
+        'codecPreference': 'auto',
       });
       expect(quality.change('changeMaxBitrate', 4000).contentHint, 'text');
       expect(

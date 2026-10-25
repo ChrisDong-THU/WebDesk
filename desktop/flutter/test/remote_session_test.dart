@@ -72,7 +72,7 @@ class VideoSender extends Fake implements RTCRtpSender {
   }
 }
 
-class MediaPeer extends Peer {
+class MediaPeer extends RecoveryPeer {
   MediaPeer(super.calls);
   final sender = VideoSender();
   @override
@@ -113,6 +113,49 @@ class Peer extends Fake implements RTCPeerConnection {
   }
 }
 
+class RecoveryPeer extends Peer {
+  RecoveryPeer(super.calls);
+  final remoteDescriptions = <RTCSessionDescription>[];
+  final localDescriptions = <RTCSessionDescription>[];
+  final candidates = <RTCIceCandidate>[];
+  final offers = <Map<String, dynamic>>[];
+  Completer<void>? offerGate;
+  int restarts = 0;
+  @override
+  Future<void> restartIce() async {
+    restarts++;
+  }
+
+  @override
+  Future<RTCSessionDescription> createOffer([
+    Map<String, dynamic>? constraints,
+  ]) async {
+    offers.add(constraints ?? {});
+    await offerGate?.future;
+    return RTCSessionDescription(
+      'v=0\r\na=ice-ufrag:local$restarts\r\n',
+      'offer',
+    );
+  }
+
+  @override
+  Future<void> setLocalDescription(RTCSessionDescription description) async {
+    localDescriptions.add(description);
+  }
+
+  @override
+  Future<void> setRemoteDescription(RTCSessionDescription description) async {
+    remoteDescriptions.add(description);
+  }
+
+  @override
+  Future<List<RTCRtpSender>> getSenders() async => [];
+  @override
+  Future<void> addCandidate(RTCIceCandidate candidate) async {
+    candidates.add(candidate);
+  }
+}
+
 void main() {
   RemoteSession session(
     Bridge bridge,
@@ -125,6 +168,124 @@ void main() {
     onError: (_) {},
     desktopFactory: (_) => bridge,
     connectionFactory: factory,
+  );
+  test(
+    'close during an ICE offer drains it without sending SDP or reopening resources',
+    () async {
+      final calls = <String>[], signals = <Map<String, dynamic>>[];
+      final pc = RecoveryPeer(calls)..offerGate = Completer<void>();
+      final remote = RemoteSession(
+        id: 'closing',
+        quality: const Quality(),
+        signal: (_, data) => signals.add(data),
+        onReady: () {},
+        onError: (_) {},
+        desktopFactory: (_) => Bridge(calls),
+        connectionFactory: (_) async => pc,
+      );
+      await expectLater(remote.start([]), throwsStateError);
+      pc.onConnectionState!(
+        RTCPeerConnectionState.RTCPeerConnectionStateFailed,
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(pc.offers, hasLength(1));
+      final closing = remote.close();
+      pc.offerGate!.complete();
+      await expectLater(closing, throwsA(isA<CleanupException>()));
+      expect(signals, isEmpty);
+      expect(pc.localDescriptions, isEmpty);
+      expect(calls.where((call) => call == 'peer close'), hasLength(1));
+    },
+  );
+  test(
+    'ICE restarts retain the peer and reject stale Answers and candidates',
+    () async {
+      final calls = <String>[];
+      final pc = RecoveryPeer(calls), bridge = Bridge(calls);
+      final signals = <Map<String, dynamic>>[];
+      final remote = RemoteSession(
+        id: 'recovery',
+        quality: const Quality(),
+        signal: (_, payload) => signals.add(payload),
+        onReady: () {},
+        onError: (_) {},
+        desktopFactory: (_) => bridge,
+        connectionFactory: (_) async => pc,
+      );
+      Map<String, dynamic> answer(String ufrag, [int? id]) => {
+        'msgType': 'nativeWebRtcAnswer',
+        'data': {
+          'sdp': {'sdp': 'v=0\r\na=ice-ufrag:$ufrag\r\n', 'type': 'answer'},
+          'negotiationId': ?id,
+        },
+      };
+      Map<String, dynamic> candidate(String? ufrag) => {
+        'msgType': 'nativeWebRtcCandidate',
+        'data': {
+          'candidate': {
+            'candidate': 'candidate:1 1 udp 1 127.0.0.1 99 typ host',
+            'sdpMid': '0',
+            'sdpMLineIndex': 0,
+            'usernameFragment': ?ufrag,
+          },
+        },
+      };
+      // Startup stops after callbacks, before capture/native audio is required.
+      await expectLater(remote.start([]), throwsStateError);
+      await remote.receive(answer('unsolicited', 0));
+      expect(pc.remoteDescriptions, isEmpty);
+      pc.onConnectionState!(
+        RTCPeerConnectionState.RTCPeerConnectionStateFailed,
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(pc.restarts, 1);
+      expect(signals.single['negotiationId'], 1);
+      await remote.receive(candidate('old'));
+      await remote.receive(answer('old', 1));
+      expect(pc.candidates, hasLength(1));
+      pc.onConnectionState!(
+        RTCPeerConnectionState.RTCPeerConnectionStateConnected,
+      );
+      pc.onConnectionState!(
+        RTCPeerConnectionState.RTCPeerConnectionStateFailed,
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(pc.restarts, 2);
+      expect(pc.offers.last['iceRestart'], isTrue);
+      expect(signals.last['negotiationId'], 2);
+      expect(calls, [
+        'release',
+        'release',
+      ], reason: 'recovery retains the peer/channel');
+      await remote.receive(candidate('new'));
+      expect(pc.candidates, hasLength(1));
+      await remote.receive(answer('stale', 1));
+      await remote.receive(answer('missing-id'));
+      expect(pc.remoteDescriptions, hasLength(1));
+      await remote.receive(answer('new', 2));
+      expect(pc.remoteDescriptions, hasLength(2));
+      expect(
+        pc.candidates,
+        hasLength(2),
+        reason: 'future generation is buffered until its Answer',
+      );
+      await remote.receive(candidate('old'));
+      expect(pc.candidates, hasLength(2));
+      pc.onConnectionState!(
+        RTCPeerConnectionState.RTCPeerConnectionStateConnected,
+      );
+      pc.onConnectionState!(
+        RTCPeerConnectionState.RTCPeerConnectionStateFailed,
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(pc.restarts, 3);
+      expect(signals.last['negotiationId'], 3);
+      await remote.receive(answer('late', 2));
+      await remote.receive(candidate(null));
+      expect(pc.remoteDescriptions, hasLength(2));
+      expect(pc.candidates, hasLength(2));
+      await expectLater(remote.close(), throwsA(isA<CleanupException>()));
+    },
   );
   test(
     'session releases later resources after multiple close failures',
@@ -195,12 +356,17 @@ void main() {
         ..height = 1080;
       final remote = session(bridge, (_) async => pc);
       await expectLater(remote.start([]), throwsStateError);
+      pc.onConnectionState!(
+        RTCPeerConnectionState.RTCPeerConnectionStateFailed,
+      );
+      await Future<void>.delayed(Duration.zero);
       final input = IncomingChannel();
       pc.onDataChannel!(input);
       final answer = remote.receive({
         'msgType': 'nativeWebRtcAnswer',
         'data': {
           'sdp': {'type': 'answer', 'sdp': 'fixture'},
+          'negotiationId': 1,
         },
       });
       await pc.sender.firstWrite.future;

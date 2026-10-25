@@ -4,10 +4,14 @@
 #ifndef AppVersion
   #error AppVersion is required
 #endif
+#ifndef AppBuildNumber
+  #define AppBuildNumber "0"
+#endif
 [Setup]
 AppId={{FC577D56-9519-4807-887C-BAE813CB83BD}
 AppName=WebDesk
 AppVersion={#AppVersion}
+VersionInfoVersion={#AppVersion}.{#AppBuildNumber}
 AppPublisher=WebDesk
 DefaultDirName={autopf}\WebDesk
 DefaultGroupName=WebDesk

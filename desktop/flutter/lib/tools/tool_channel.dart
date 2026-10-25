@@ -3,12 +3,13 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:file_selector/file_selector.dart';
+import 'package:cross_file/cross_file.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../session/cleanup.dart';
+import '../native/file_selection.dart';
 
 final _random = Random.secure();
 String randomId() => List.generate(
@@ -39,6 +40,7 @@ class ToolChannel {
     this.getMediaStats,
     this._downloadsDirectory,
     this._selectFile,
+    this._cancelFileSelection,
   ) {
     channel.onMessage = (message) {
       if (_closed) return;
@@ -67,24 +69,31 @@ class ToolChannel {
     Future<Map<String, dynamic>> Function()? getMediaStats,
     Future<Directory?> Function()? downloadsDirectory,
     Future<XFile?> Function()? selectFile,
-  }) async => ToolChannel._(
-    await pc.createDataChannel(
-      'WebDesk tools v2',
-      RTCDataChannelInit()
-        ..negotiated = true
-        ..id = 42
-        ..ordered = true,
-    ),
-    setAudioEnabled,
-    getMediaStats,
-    downloadsDirectory ?? getDownloadsDirectory,
-    selectFile ?? (() => openFile(confirmButtonText: '发送')),
-  );
+    Future<void> Function()? cancelFileSelection,
+  }) async {
+    final picker = RemoteFileSelection(randomId());
+    return ToolChannel._(
+      await pc.createDataChannel(
+        'WebDesk tools v2',
+        RTCDataChannelInit()
+          ..negotiated = true
+          ..id = 42
+          ..ordered = true,
+      ),
+      setAudioEnabled,
+      getMediaStats,
+      downloadsDirectory ?? getDownloadsDirectory,
+      selectFile ?? picker.select,
+      cancelFileSelection ?? (selectFile == null ? picker.cancel : () async {}),
+    );
+  }
+
   final RTCDataChannel channel;
   final Future<bool> Function(bool)? setAudioEnabled;
   final Future<Map<String, dynamic>> Function()? getMediaStats;
   final Future<Directory?> Function() _downloadsDirectory;
   final Future<XFile?> Function() _selectFile;
+  final Future<void> Function() _cancelFileSelection;
   final _pending = <String, Completer<dynamic>>{};
   final _selected = <String, XFile>{};
   Future<void> _queue = Future.value();
@@ -376,6 +385,7 @@ class ToolChannel {
     // Receive error handlers schedule close without awaiting it, so callers
     // can await both channel closure and removal of incomplete disk files.
     return _closing = Future.wait<void>([
+      if (_selecting) _cancelFileSelection(),
       _queue.then((_) => _abort()),
       channel.close(),
     ]).then((_) {});

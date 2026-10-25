@@ -1,0 +1,615 @@
+{
+  "date": "2026-10-25",
+  "scope": "Static focused reverse engineering of the user-selected installed BilldDesk 0.609.0 native artifacts. No product source edits, no target execution, no tool installation.",
+  "modules": {
+    "libwebrtc": {
+      "path": "D:\\BilldDesk\\libwebrtc.dll",
+      "sha256": "9d7933cc2eefe111502e7ef5aef23a07a943209590ffb781d3f494149d7392c1",
+      "bytes": 20515328,
+      "image_base": "0x180000000"
+    },
+    "flutter_webrtc_plugin": {
+      "path": "D:\\BilldDesk\\flutter_webrtc_plugin.dll",
+      "sha256": "f1f0e5fe955913e6488646e90e190de41afccede3ab3e79dfcd1c1c05c9bfa3e",
+      "bytes": 498176,
+      "image_base": "0x180000000"
+    }
+  },
+  "rea_retained_observations": [
+    {
+      "path": "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-headers.json",
+      "evidence_id": "ev_df9826857fcdf71faba9e07be8e651957accd96a24edc3c06618e1dfbc6fb6a7",
+      "operation": "inspect_with_objdump",
+      "subject": {
+        "name": "libwebrtc.dll",
+        "digest": {
+          "sha256": "9d7933cc2eefe111502e7ef5aef23a07a943209590ffb781d3f494149d7392c1"
+        },
+        "local_path": "D:\\BilldDesk\\libwebrtc.dll",
+        "format": "unknown",
+        "architecture": null
+      },
+      "limitations": [
+        "The executable version and supported formats are reported as unknown because no reliable version probe was performed.",
+        "A non-zero process exit is preserved as an observed command result.",
+        "When both are available, pre-run and post-run digests detect artifact changes across the provider call but cannot prove the exact bytes consumed during the call."
+      ],
+      "completion_status": "complete",
+      "output_truncated": false
+    },
+    {
+      "path": "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-sections.json",
+      "evidence_id": "ev_f116d1cd6c21c23a0427228500cc1aaaada4f276e5b130be99e2062158366db5",
+      "operation": "inspect_with_objdump",
+      "subject": {
+        "name": "libwebrtc.dll",
+        "digest": {
+          "sha256": "9d7933cc2eefe111502e7ef5aef23a07a943209590ffb781d3f494149d7392c1"
+        },
+        "local_path": "D:\\BilldDesk\\libwebrtc.dll",
+        "format": "unknown",
+        "architecture": null
+      },
+      "limitations": [
+        "The executable version and supported formats are reported as unknown because no reliable version probe was performed.",
+        "A non-zero process exit is preserved as an observed command result.",
+        "When both are available, pre-run and post-run digests detect artifact changes across the provider call but cannot prove the exact bytes consumed during the call."
+      ],
+      "completion_status": "complete",
+      "output_truncated": false
+    },
+    {
+      "path": "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-symbols-recheck.json",
+      "evidence_id": "ev_25c6f3b651daa6c1bdc199df605863336fb4db2ffa00591e2baf64b33a272c31",
+      "operation": "inspect_with_objdump",
+      "subject": {
+        "name": "libwebrtc.dll",
+        "digest": {
+          "sha256": "9d7933cc2eefe111502e7ef5aef23a07a943209590ffb781d3f494149d7392c1"
+        },
+        "local_path": "D:\\BilldDesk\\libwebrtc.dll",
+        "format": "unknown",
+        "architecture": null
+      },
+      "limitations": [
+        "The executable version and supported formats are reported as unknown because no reliable version probe was performed.",
+        "A non-zero process exit is preserved as an observed command result.",
+        "When both are available, pre-run and post-run digests detect artifact changes across the provider call but cannot prove the exact bytes consumed during the call."
+      ],
+      "completion_status": "complete",
+      "output_truncated": false
+    },
+    {
+      "path": "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\plugin-symbols.json",
+      "evidence_id": "ev_8f2a4cb11b8daf0e1b5b6be4fd18d9773e84763f98994878653e9720f24d9057",
+      "operation": "inspect_with_objdump",
+      "subject": {
+        "name": "flutter_webrtc_plugin.dll",
+        "digest": {
+          "sha256": "f1f0e5fe955913e6488646e90e190de41afccede3ab3e79dfcd1c1c05c9bfa3e"
+        },
+        "local_path": "D:\\BilldDesk\\flutter_webrtc_plugin.dll",
+        "format": "unknown",
+        "architecture": null
+      },
+      "limitations": [
+        "The executable version and supported formats are reported as unknown because no reliable version probe was performed.",
+        "A non-zero process exit is preserved as an observed command result.",
+        "When both are available, pre-run and post-run digests detect artifact changes across the provider call but cannot prove the exact bytes consumed during the call."
+      ],
+      "completion_status": "complete",
+      "output_truncated": false
+    },
+    {
+      "path": "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\plugin-disassembly.json",
+      "evidence_id": "ev_188087ff2ca1ae75600030e560c032ca21eb346c079ca8f94d7560c5e51c6948",
+      "operation": "inspect_with_objdump",
+      "subject": {
+        "name": "flutter_webrtc_plugin.dll",
+        "digest": {
+          "sha256": "f1f0e5fe955913e6488646e90e190de41afccede3ab3e79dfcd1c1c05c9bfa3e"
+        },
+        "local_path": "D:\\BilldDesk\\flutter_webrtc_plugin.dll",
+        "format": "unknown",
+        "architecture": null
+      },
+      "limitations": [
+        "The executable version and supported formats are reported as unknown because no reliable version probe was performed.",
+        "A non-zero process exit is preserved as an observed command result.",
+        "When both are available, pre-run and post-run digests detect artifact changes across the provider call but cannot prove the exact bytes consumed during the call."
+      ],
+      "completion_status": "complete",
+      "output_truncated": false
+    }
+  ],
+  "method": "Reused authenticated REA GNU objdump evidence for artifact identity and existing plugin disassembly. Supplemental pefile/Capstone reads selected original PE unwind extents, explicit bounded leaf ranges, vtable pointer bytes and literal data. These supplemental native deductions are not REA decompilation or original source.",
+  "virtual_slot_names_inferred": [
+    "GetSupportedFormats",
+    "GetImplementations",
+    "QueryCodecSupport",
+    "Create",
+    "GetEncoderSelector",
+    "destructor"
+  ],
+  "virtual_tables": [
+    {
+      "name": "aggregate",
+      "rva": "0x11607e0",
+      "entries": [
+        "0x3bd770",
+        "0x3bde20",
+        "0x3bde40",
+        "0x3be3c0",
+        "0x3bf0f0",
+        "0x3bf100"
+      ]
+    },
+    {
+      "name": "software",
+      "rva": "0x1160810",
+      "entries": [
+        "0x585e30",
+        "0x3bde20",
+        "0x5861a0",
+        "0x585ea0",
+        "0x3bf0f0",
+        "0x173f0"
+      ]
+    },
+    {
+      "name": "NVENC",
+      "rva": "0x1180190",
+      "entries": [
+        "0x567420",
+        "0x3bde20",
+        "0x567c80",
+        "0x566eb0",
+        "0x3bf0f0",
+        "0x173f0"
+      ]
+    },
+    {
+      "name": "AMF H264",
+      "rva": "0x1180910",
+      "entries": [
+        "0x568e00",
+        "0x3bde20",
+        "0x568f40",
+        "0x568b90",
+        "0x3bf0f0",
+        "0x173f0"
+      ]
+    },
+    {
+      "name": "AMF AV1",
+      "rva": "0x1180fb0",
+      "entries": [
+        "0x570200",
+        "0x3bde20",
+        "0x5702d0",
+        "0x56ffc0",
+        "0x3bf0f0",
+        "0x173f0"
+      ]
+    },
+    {
+      "name": "AMF H265",
+      "rva": "0x1181620",
+      "entries": [
+        "0x5767e0",
+        "0x3bde20",
+        "0x576f40",
+        "0x5765a0",
+        "0x3bf0f0",
+        "0x173f0"
+      ]
+    }
+  ],
+  "native_vendor_modes": {
+    "0-empty-or-unrecognized": [
+      "NVIDIA",
+      "AMD"
+    ],
+    "1-amd": [
+      "AMD"
+    ],
+    "2-nvidia": [
+      "NVIDIA"
+    ],
+    "3-amd,nvidia": [
+      "AMD",
+      "NVIDIA"
+    ],
+    "4-nvidia,amd": [
+      "NVIDIA",
+      "AMD"
+    ]
+  },
+  "codec_enum_observed": {
+    "0": "Generic",
+    "1": "VP8",
+    "2": "VP9",
+    "3": "AV1",
+    "4": "H264",
+    "5": "H265"
+  },
+  "observations": [
+    {
+      "id": "aggregate-construction",
+      "claim": "The native aggregate factory allocates five child factories: software at this+0x08, NVENC at +0x10, AMF H264 at +0x18, AMF AV1 at +0x20, AMF H265 at +0x28.",
+      "rvas": [
+        "0x3bd6c0",
+        "0x3bd6f5",
+        "0x3bd70e",
+        "0x3bd727",
+        "0x3bd740",
+        "0x3bd759"
+      ],
+      "supplemental_files": [
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x3bd6c0.asm"
+      ],
+      "confidence": "observed-instructions",
+      "limits": []
+    },
+    {
+      "id": "supported-vs-implementations",
+      "claim": "Aggregate GetSupportedFormats is RVA 0x3bd770. GetImplementations RVA 0x3bde20 dispatches to vtable slot 0 (GetSupportedFormats), rather than returning a separately scored implementation inventory.",
+      "rvas": [
+        "0x11607e0",
+        "0x3bd770",
+        "0x3bde20",
+        "0x3bde28",
+        "0x3bde2e"
+      ],
+      "supplemental_files": [
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x3bd770.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x3bde20.asm"
+      ],
+      "confidence": "observed-vtable-and-instructions",
+      "limits": [
+        "Method names are reconstructed from the consistent VideoEncoderFactory vtable ABI and behavior; no native symbols are present."
+      ]
+    },
+    {
+      "id": "hardware-switches",
+      "claim": "Plugin reads disableHardwareEncode/Decode and disableHardwareEncode/DecodeZerocopy separately. Missing boolean values use the false default supplied to helper 0x26290. It sends the values through four independent libwebrtc setters. These are implementation/path controls, not a codec ranking score.",
+      "rvas": [
+        "plugin:0x25702",
+        "plugin:0x2570c",
+        "plugin:0x25839",
+        "plugin:0x25843",
+        "plugin:0x258dc",
+        "plugin:0x258e6",
+        "plugin:0x25a90",
+        "plugin:0x25a94",
+        "plugin:0x25aa8",
+        "plugin:0x25ab1"
+      ],
+      "supplemental_files": [
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\flutter_webrtc_plugin-0x25670.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\flutter_webrtc_plugin-0x26290.asm"
+      ],
+      "confidence": "observed-instructions",
+      "limits": [
+        "Plugin absent-key defaults are not proof of values supplied by the Dart application or remote RTC configuration."
+      ]
+    },
+    {
+      "id": "vendor-preference",
+      "claim": "Plugin hardwareEncoder/hardwareDecoder strings reach vendor preference setters. Native parser recognizes comma-separated amd/nvidia and generates a vendor preference enum; order builder expands this into AMD only, NVIDIA only, AMD then NVIDIA, or NVIDIA then AMD. Empty/unrecognized native input maps to NVIDIA then AMD.",
+      "rvas": [
+        "plugin:0x25940",
+        "plugin:0x2597d",
+        "plugin:0x25a6d",
+        "plugin:0x25a8a",
+        "0x3bd0c0",
+        "0x3bd375",
+        "0x3bd38e",
+        "0x3bd3a7",
+        "0x3bd401",
+        "0x3bd4c0",
+        "0x3bd4e0"
+      ],
+      "supplemental_files": [
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\flutter_webrtc_plugin-0x25670.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x3bd0c0.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x3bd4c0.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x3bd4e0.asm"
+      ],
+      "confidence": "observed-instructions",
+      "limits": [
+        "This establishes a native fallback order for unspecified vendor preference, not application-default codec preference."
+      ]
+    },
+    {
+      "id": "aggregate-format-order",
+      "claim": "When hardware encoding is enabled, the aggregate gathers supported hardware formats in configured vendor order, then appends software formats. AMF AV1/H265 lists are included only when AMD is permitted. H265 is removed from the appended software list. Hardware disable bypasses hardware collection.",
+      "rvas": [
+        "0x3bd7ae",
+        "0x3bd7d3",
+        "0x3bd84d",
+        "0x3bd85c",
+        "0x3bd910",
+        "0x3bda10",
+        "0x3bda2c",
+        "0x3bdc6b",
+        "0x3bdb0d",
+        "0x3bdb31",
+        "0x3bdd7c"
+      ],
+      "supplemental_files": [
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x3bd770.asm"
+      ],
+      "confidence": "observed-instructions",
+      "limits": [
+        "These are factory capability-list assembly branches. SDP negotiation, application setCodecPreferences, profile matching, and any later deduplication can change the final negotiated codec."
+      ]
+    },
+    {
+      "id": "nvenc-capability-filter",
+      "claim": "NVENC GetSupportedFormats 0x567420 calls cached capability helper 0x564a20 for codec IDs 4(H264),5(H265),3(AV1), in that order; unsupported results are omitted. Helper 0x564a20 uses C++ guarded static initialization for cached per-codec probes.",
+      "rvas": [
+        "0x567420",
+        "0x567456",
+        "0x56745b",
+        "0x567510",
+        "0x567515",
+        "0x567ae8",
+        "0x567aed",
+        "0x564a20",
+        "0x564ae0",
+        "0x564b15",
+        "0x564b4a"
+      ],
+      "supplemental_files": [
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x567420.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x564a20.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x564b70.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x564c40.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x564d10.asm"
+      ],
+      "confidence": "observed-instructions",
+      "limits": [
+        "The order is capability assembly, not a demonstrated quality/latency/bitrate score. Cached probe success is not proof of encoding a requested profile/resolution or of a later live session using hardware."
+      ]
+    },
+    {
+      "id": "nvenc-probe-work",
+      "claim": "The H264 probe calls LoadNvEncApi, NVIDIA D3D resource creation, OpenEncodeSession, and CheckEncodeSupport, then cleans up. Native support checking enumerates codec GUIDs and accepted input formats including NV12 and queries several encoder capabilities. AV1/H265 have corresponding probes.",
+      "rvas": [
+        "0x564bdf",
+        "0x564bed",
+        "0x564bfb",
+        "0x564c09",
+        "0x564c19",
+        "0x55f300",
+        "0x55f710",
+        "0x55fcc0",
+        "0x55fe00",
+        "0x5602c5",
+        "0x560471"
+      ],
+      "supplemental_files": [
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x564b70.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x564c40.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x564d10.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x55f300.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x55f710.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x55fcc0.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x55fe00.asm"
+      ],
+      "confidence": "observed-instructions",
+      "limits": [
+        "No target execution occurred. This does not establish which probes succeed on the current user machine or on a remote peer. No performance measurement is part of this selected probe."
+      ]
+    },
+    {
+      "id": "amf-capability-filter",
+      "claim": "AMF H264 and AV1 GetSupportedFormats contain guarded cached probe-result checks and return an empty format vector when unavailable; H265 has its own factory. H264 additionally filters packetization support through helper 0x750480.",
+      "rvas": [
+        "0x568e1b",
+        "0x568e54",
+        "0x568eae",
+        "0x568ed2",
+        "0x57021f",
+        "0x570258",
+        "0x57029c",
+        "0x5767e0",
+        "0x750480"
+      ],
+      "supplemental_files": [
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x568e00.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x570200.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x5767e0.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x750480.asm"
+      ],
+      "confidence": "observed-instructions",
+      "limits": [
+        "The selected AMF view establishes cached availability gates; the full device/driver initialization and all error conditions were not expanded in this focused investigation."
+      ]
+    },
+    {
+      "id": "software-format-order",
+      "claim": "The selected software factory assembles VP8, H264, AV1, then VP9 formats. It recursively appends and deduplicates formats through 0x5863f0/0x586630/0x586770. VP8 constructor 0x57e870 references VP8; AV1 builder 0x57f7a0 references AV1; H264 builder 0x74fc20 names SupportedH264Codecs; VP9 builder path is 0x74ef90 -> 0x57ea60.",
+      "rvas": [
+        "0x585e30",
+        "0x585e58",
+        "0x58642f",
+        "0x58643c",
+        "0x5865a0",
+        "0x586671",
+        "0x58667e",
+        "0x5867b1",
+        "0x5867c7",
+        "0x58691b",
+        "0x586928",
+        "0x57e8ab",
+        "0x57fad5",
+        "0x74fcbc"
+      ],
+      "supplemental_files": [
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x585e30.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x5863f0.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x586530.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x586630.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x586770.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x5868d0.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x57e870.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x57f7a0.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x57ea60.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x74ef90.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x74fc20.asm"
+      ],
+      "confidence": "observed-instructions",
+      "limits": [
+        "This is the software child capability order, not the application default or a recommendation that VP8 is best. Hardware lists precede it when enabled and available."
+      ]
+    },
+    {
+      "id": "create-prefers-compatible-hardware",
+      "claim": "Aggregate Create 0x3be3c0 checks hardware disable, codec name (including H265/AV1), per-factory supported formats, and configured vendor order. It invokes the first compatible non-null hardware Create branch; otherwise it reaches the compatible software implementation path. It selects an implementation for the requested codec, rather than freely changing the requested codec to maximize a score.",
+      "rvas": [
+        "0x3be3fb",
+        "0x3be402",
+        "0x3be44d",
+        "0x3be53d",
+        "0x3be5e9",
+        "0x3be788",
+        "0x3be8f3",
+        "0x3be927",
+        "0x3bea21",
+        "0x3bea53",
+        "0x3beb87",
+        "0x3bebb9",
+        "0x3bef6e",
+        "0x3bf016",
+        "0x3bf03d"
+      ],
+      "supplemental_files": [
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x3be3c0.asm"
+      ],
+      "confidence": "observed-instructions",
+      "limits": []
+    },
+    {
+      "id": "av1-same-codec-wrapper",
+      "claim": "For an existing native AV1 encoder, aggregate Create verifies a matching software AV1 format, creates that software encoder, and calls 0x5807b0 with native and software encoders. 0x5807b0 constructs 0x580890; that constructor and its methods are independently tied to video_encoder_software_fallback_wrapper.cc and VESFW log strings in retained references. Thus outer-layer AV1 hardware-to-software fallback exists even though NVENC internal InitSoftwareFallback only handles H264.",
+      "rvas": [
+        "0x3be93c",
+        "0x3bec4d",
+        "0x3bec64",
+        "0x3becc5",
+        "0x3bed45",
+        "0x3bed5c",
+        "0x3beda3",
+        "0x5807b0",
+        "0x580820",
+        "0x580d3d",
+        "0x5812a5",
+        "0x581365"
+      ],
+      "supplemental_files": [
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x3be3c0.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x5807b0.asm"
+      ],
+      "confidence": "observed-instructions",
+      "limits": [
+        "This is same-codec AV1 implementation fallback. It does not establish AV1 as preferred over H264 or VP9 in the application."
+      ]
+    },
+    {
+      "id": "h264-internal-fallback",
+      "claim": "NVENC InitEncode failure calls 0x565140; codec type 4 constructs software H264 through 0x750610. Other codec types are rejected only within this specific internal fallback routine, not necessarily by the whole outer factory.",
+      "rvas": [
+        "0x56595d",
+        "0x565178",
+        "0x56521a",
+        "0x565370"
+      ],
+      "supplemental_files": [
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x5655a0.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x565140.asm"
+      ],
+      "confidence": "observed-instructions",
+      "limits": []
+    },
+    {
+      "id": "factory-selector-null",
+      "claim": "All inspected aggregate/NVENC/AMF/software factory vtables have slot 4 pointing to 0x3bf0f0; that routine writes a null unique_ptr result. Under the reconstructed VideoEncoderFactory ABI this is GetEncoderSelector. Therefore these factories do not supply a dynamic selector that ranks codecs by live CPU, network, latency, or quality.",
+      "rvas": [
+        "0x11607e0",
+        "0x1160810",
+        "0x1180190",
+        "0x1180910",
+        "0x1180fb0",
+        "0x1181620",
+        "0x3bf0f0",
+        "0x3bf0f3"
+      ],
+      "supplemental_files": [
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x3bf0f0.asm"
+      ],
+      "confidence": "observed-vtable-and-instructions",
+      "limits": [
+        "The virtual method name depends on ABI reconstruction. Other application injection/upper-layer policy outside these factories was not ruled out."
+      ]
+    },
+    {
+      "id": "dynamic-failure-switch",
+      "claim": "VSE RequestEncoderSwitch has an optional selector path, then a fallback path when no selector candidate exists. That fallback passes enum 1 to the codec-name table at 0x1160698, whose entry 1 points to VP8 at 0x116066e, and invokes the switch callback. This is a failure fallback mechanism, not initial best-codec selection.",
+      "rvas": [
+        "0x96ce60",
+        "0x96cf55",
+        "0x96cf65",
+        "0x96cf71",
+        "0x96cfeb",
+        "0x96cff0",
+        "0x3bcc50",
+        "0x1160698",
+        "0x116066e",
+        "0x96d071",
+        "0x96d087"
+      ],
+      "supplemental_files": [
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x96ce60.asm",
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x3bcc50.asm"
+      ],
+      "confidence": "observed-instructions",
+      "limits": [
+        "Presence of a selector interface is not evidence that the application installs one. The exact set of live failure triggers and observed transitions was not established by execution."
+      ]
+    },
+    {
+      "id": "plugin-can-reorder",
+      "claim": "The actual plugin method dispatcher recognizes setCodecPreferences, resolves a peer/transceiver and contains distinct errors for a missing peer or transceiver. This supplies an upper-layer override surface, so native factory order alone cannot establish Dart/application default order.",
+      "rvas": [
+        "plugin:0x4da4a",
+        "plugin:0x4db53",
+        "plugin:0x4dc0b"
+      ],
+      "supplemental_files": [
+        "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\flutter_webrtc_plugin-0x4da40.asm"
+      ],
+      "confidence": "observed-instructions",
+      "limits": [
+        "The complete Dart call graph, argument values, default_rtc_config response, and runtime negotiated SDP were not recovered in this focused native pass."
+      ]
+    }
+  ],
+  "supported_conclusion": "This build implements device/codec capability filtering, configurable hardware-vendor preference, hardware-first compatible encoder creation, same-codec software fallback and a VP8 failure fallback. The selected native factories do not implement an observed automatic best-codec scoring algorithm.",
+  "unknowns": [
+    "Actual Dart/default_rtc_config codec preference and whether the application reorders native formats.",
+    "The current user machine probe outcomes or active BilldDesk codec/vendor/profile/zero-copy path; no BilldDesk process was executed.",
+    "Any upper-layer per-session CPU/network/receiver-based ranking and its thresholds, hysteresis, restoration policy, or whether it exists.",
+    "Whether the app injects an encoder selector through a route outside the inspected factories.",
+    "Exact behavior of every hardware/driver error and all cross-codec runtime transitions.",
+    "Full indirect call graph, exact original source types and variable names.",
+    "End-to-end quality/performance compared with WebDesk."
+  ],
+  "migration_guidance_inference": [
+    "Use a per-codec/per-implementation capability matrix with actual driver probes, not only one hardwareH264 boolean or a fixed protocol name.",
+    "Keep codec protocol negotiation separate from selecting a hardware/software implementation of that codec.",
+    "Preserve same-codec software fallback, compatible remote capabilities, and explicit failure fallback.",
+    "A quality/latency/network/CPU-based best-codec policy for WebDesk must be independently specified and measured; do not attribute such an algorithm to BilldDesk from these static factories."
+  ]
+}

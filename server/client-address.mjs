@@ -9,12 +9,14 @@ function normalize(address) {
 // Trust only an explicitly configured immediate proxy, never an arbitrary
 // forwarding chain. The proxy must OVERWRITE X-Real-IP with its client's IP.
 export function clientAddressResolver(trustedProxies = []) {
-  const trusted = new Set(trustedProxies.map(address => {
-    const normalized = normalize(address);
-    if (!normalized) throw Error(`Invalid TRUSTED_PROXIES address: ${address}`);
-    return normalized;
-  }));
-  return socket => {
+  const trusted = new Set(
+    trustedProxies.map((address) => {
+      const normalized = normalize(address);
+      if (!normalized) throw Error(`Invalid TRUSTED_PROXIES address: ${address}`);
+      return normalized;
+    }),
+  );
+  return (socket) => {
     const peer = normalize(socket.handshake.address) ?? socket.handshake.address;
     const forwarded = normalize(socket.handshake.headers['x-real-ip']);
     return trusted.has(peer) && forwarded ? forwarded : peer;

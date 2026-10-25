@@ -47,6 +47,10 @@ int main() {
   for(int y=0;y<8;++y) for(int x=0;x<16;++x) stride &= padded->DataY()[y*padded->StrideY()+x]==oldY;
   publish(8,16,0,255,0,0);
   bool dimensions=sink.frames.back().width()==8 && sink.frames.back().height()==16;
+  // Release the two separately retained old-resolution references before
+  // measuring the full four-slot capacity. They now count toward that bound.
+  first = nullptr;
+  padded = nullptr;
   sink.frames.clear();
   for(int i=0;i<4;++i) publish(8,16,0,255,0,0);
   const auto full=sink.frames.size();

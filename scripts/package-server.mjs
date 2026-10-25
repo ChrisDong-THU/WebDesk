@@ -22,7 +22,9 @@ try {
   }
   const archive = `${staging}.tar.gz`;
   execFileSync('tar', ['-czf', archive, '-C', staging, '.'], { stdio: 'inherit' });
-  const digest = createHash('sha256').update(await readFile(archive)).digest('hex');
+  const digest = createHash('sha256')
+    .update(await readFile(archive))
+    .digest('hex');
   await writeFile(`${archive}.sha256`, `${digest}  ${path.basename(archive)}\n`);
   console.log(JSON.stringify({ archive, sha256: digest }));
 } finally {

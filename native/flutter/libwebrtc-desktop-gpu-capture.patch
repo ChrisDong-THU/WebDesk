@@ -1,0 +1,823 @@
+diff --git a/include/rtc_desktop_capturer.h b/include/rtc_desktop_capturer.h
+--- a/include/rtc_desktop_capturer.h
++++ b/include/rtc_desktop_capturer.h
+@@ -37,6 +37,7 @@
+     Backend backend = Backend::kAuto;
+     uint32_t max_width = 0;
+     uint32_t max_height = 0;
++    bool allow_native_texture = true;
+   };
+   struct CaptureHealth {
+     Backend requested_backend = Backend::kAuto;
+@@ -50,10 +51,18 @@
+     int source_width = 0, source_height = 0;
+     int output_width = 0, output_height = 0;
+     bool recovering = false;
++    bool native_texture_active = false;
++    uint32_t native_texture_unavailable_reason = 0;
++    int64_t native_texture_hresult = 0;
++    uint64_t native_texture_frames = 0, native_texture_drops = 0, native_texture_errors = 0;
+   };
+   // Configure before Start. Unsupported WGC degrades to Auto with an explicit
+   // health reason. No implicit WGC opt-in is performed.
+   virtual bool SetCapturePolicy(const CapturePolicy& policy) = 0;
++  // Change the input representation on the existing running source. Rebuilds
++  // on its capture thread, releasing duplication before opening its successor.
++  // Returns false when stopped or construction fails (bounded recovery remains).
++  virtual bool SetNativeTextureEnabled(bool enabled) = 0;
+   // A short synchronized snapshot; no native pixels, handles or IDs escape.
+   virtual CaptureHealth GetCaptureHealth() = 0;
+ 
+diff --git a/src/rtc_desktop_capturer_impl.h b/src/rtc_desktop_capturer_impl.h
+--- a/src/rtc_desktop_capturer_impl.h
++++ b/src/rtc_desktop_capturer_impl.h
+@@ -20,6 +20,8 @@
+ #include <atomic>
+ #include <mutex>
+ #include <vector>
++#include <optional>
++#include <string>
+ #include "src/internal/bounded_i420_pool.h"
+ #include "src/internal/desktop_capture_policy.h"
+ #include "api/video/video_frame.h"
+@@ -34,6 +36,9 @@
+ #include "src/internal/video_capturer.h"
+ 
+ namespace libwebrtc {
++#ifdef WEBRTC_WIN
++namespace desktop_d3d11 { class Capturer; class Buffer; struct TexturePool; }
++#endif
+ 
+ class RTCDesktopCapturerImpl : public RTCDesktopCapturer,
+                                public webrtc::DesktopCapturer::Callback,
+@@ -57,6 +62,7 @@
+                      uint32_t h) override;
+ 
+   bool SetCapturePolicy(const CapturePolicy& policy) override;
++  bool SetNativeTextureEnabled(bool enabled) override;
+   CaptureHealth GetCaptureHealth() override;
+   void Stop() override;
+ 
+@@ -75,6 +81,13 @@
+   bool BuildCapturer(Backend backend);
+   void RecordCaptureError(bool permanent);
+   void RecordDrop();
++#ifdef WEBRTC_WIN
++  void OnNativeFrame(webrtc::scoped_refptr<desktop_d3d11::Buffer> frame);
++  std::unique_ptr<desktop_d3d11::Capturer> native_capturer_;
++  std::shared_ptr<desktop_d3d11::TexturePool> native_pool_;
++  int64_t native_started_ms_ = 0;
++  std::optional<std::wstring> source_device_key_;
++#endif
+   CapturePolicy policy_;
+   Backend preferred_backend_ = Backend::kAuto;
+   Backend last_identified_backend_ = Backend::kAuto;
+@@ -83,7 +96,7 @@
+   std::mutex health_mutex_;
+   CaptureHealth health_;
+   int64_t last_frame_ms_ = -1;
+-  int64_t last_preconvert_us_ = 0;
++  capture_policy::FrameRateGate preconvert_gate_;
+   std::vector<uint8_t> scaled_argb_;
+   std::atomic<uint64_t> capture_generation_{0};
+   webrtc::DesktopCaptureOptions options_;
+diff --git a/src/rtc_desktop_capturer_impl.cc b/src/rtc_desktop_capturer_impl.cc
+--- a/src/rtc_desktop_capturer_impl.cc
++++ b/src/rtc_desktop_capturer_impl.cc
+@@ -26,6 +26,9 @@
+ #ifdef WEBRTC_WIN
+ #include <windows.h>
+ #endif
++#ifdef WEBRTC_WIN
++#include "src/internal/desktop_d3d11_capturer.h"
++#endif
+ #if defined(RTC_ENABLE_WIN_WGC)
+ #include "modules/desktop_capture/win/wgc_capturer_win.h"
+ #endif
+@@ -58,6 +61,9 @@
+       source_id_(source_id), source_(source) {
+   RTC_DCHECK(thread_);
+   thread_->Start();
++#ifdef WEBRTC_WIN
++  native_pool_ = std::make_shared<desktop_d3d11::TexturePool>();
++#endif
+   recovery_.Reset(0);
+ }
+ 
+@@ -65,7 +71,13 @@
+   capture_state_ = CS_STOPPED;
+   ++capture_generation_;
+   // WGC/DXGI resources are created, driven and released on the capture thread.
+-  thread_->BlockingCall([this] { capturer_.reset(); });
++  thread_->BlockingCall([this] {
++#ifdef WEBRTC_WIN
++    native_capturer_.reset();
++    native_pool_.reset();
++#endif
++    capturer_.reset();
++  });
+   thread_->Stop();
+ }
+ 
+@@ -103,6 +115,40 @@
+   });
+ }
+ 
++bool RTCDesktopCapturerImpl::SetNativeTextureEnabled(bool enabled) {
++  return thread_->BlockingCall([this, enabled] {
++    if (capture_state_ != CS_RUNNING) return false;
++    if (policy_.allow_native_texture == enabled) {
++#ifdef WEBRTC_WIN
++      return capturer_ != nullptr || native_capturer_ != nullptr;
++#else
++      return capturer_ != nullptr;
++#endif
++    }
++    policy_.allow_native_texture = enabled;
++    // BuildCapturer releases both previous capturers before constructing the
++    // replacement. Retained native frames own their textures independently;
++    // they neither retain duplication nor get overwritten during this switch.
++    recovery_.Reset(static_cast<int>(preferred_backend_));
++    preconvert_gate_.Reset();
++    const bool created = BuildCapturer(preferred_backend_);
++    recovery_.Rebuilt(webrtc::TimeMillis(), created,
++                      static_cast<int>(preferred_backend_));
++    {
++      std::lock_guard<std::mutex> lock(health_mutex_);
++      ++health_.rebuilds;
++      health_.recovering = recovery_.recovering();
++      health_.consecutive_errors = 0;
++      health_.fallback_reason = !created ? FallbackReason::kCreateFailed :
++          (health_.fallback_reason == FallbackReason::kBackendUnavailable ?
++           FallbackReason::kBackendUnavailable : FallbackReason::kNone);
++      if (!created) ++health_.capture_errors;
++    }
++    // Stop() can race while a native constructor runs; never restart its loop.
++    return created && capture_state_ == CS_RUNNING;
++  });
++}
++
+ RTCDesktopCapturer::CaptureHealth RTCDesktopCapturerImpl::GetCaptureHealth() {
+   std::lock_guard<std::mutex> lock(health_mutex_);
+   auto health = health_;
+@@ -114,6 +160,43 @@
+ bool RTCDesktopCapturerImpl::BuildCapturer(Backend backend) {
+   RTC_DCHECK_RUN_ON(thread_.get());
+   capturer_.reset();
++#ifdef WEBRTC_WIN
++  native_capturer_.reset();
++  if (type_ == kScreen && source_id_ != -1) {
++    std::wstring key;
++    if (!webrtc::IsScreenValid(source_id_, &key) ||
++        (source_device_key_ && *source_device_key_ != key)) return false;
++    source_device_key_ = std::move(key);
++  }
++  {
++    std::lock_guard<std::mutex> lock(health_mutex_);
++    health_.native_texture_active = false;
++    health_.active_backend = Backend::kAuto;
++  }
++  uint32_t native_reason = 0;
++  int64_t native_hresult = 0;
++  if (!policy_.allow_native_texture) native_reason = 1;
++  else if (show_cursor_) native_reason = 2;
++  else if (w_ || h_) native_reason = 3;
++  else if (type_ != kScreen) native_reason = 4;
++  else if (backend != Backend::kAuto && backend != Backend::kDxgi) native_reason = 5;
++  if (!native_reason) {
++    native_capturer_ = desktop_d3d11::Capturer::Create(
++        source_id_, policy_.max_width, policy_.max_height, native_pool_,
++        &native_reason, &native_hresult);
++  }
++  {
++    std::lock_guard<std::mutex> lock(health_mutex_);
++    health_.native_texture_unavailable_reason = native_reason;
++    health_.native_texture_hresult = native_hresult;
++  }
++  if (native_capturer_) {
++    native_started_ms_ = webrtc::TimeMillis();
++    std::lock_guard<std::mutex> lock(health_mutex_);
++    health_.native_texture_active = true;
++    return true;
++  }
++#endif
+   options_ = webrtc::DesktopCaptureOptions::CreateDefault();
+   options_.set_detect_updated_region(true);
+ #ifdef WEBRTC_WIN
+@@ -165,7 +248,7 @@
+   if (!fps) { capture_state_ = CS_FAILED; return CS_FAILED; }
+   capture_delay_ = 1000 / std::min<uint32_t>(60, fps);
+   recovery_.Reset(static_cast<int>(preferred_backend_));
+-  last_preconvert_us_ = 0;
++  preconvert_gate_.Reset();
+   bool created = BuildCapturer(preferred_backend_);
+   if (!created) {
+     std::lock_guard<std::mutex> lock(health_mutex_);
+@@ -249,9 +332,12 @@
+   // OnFrame still owns the exact VideoAdapter decision; calling it twice with
+   // the same timestamp would consume its fps budget and drop valid frames.
+   const auto wants = GetSinkWants();
+-  if (wants.max_framerate_fps <= 0 || wants.max_pixel_count <= 0 ||
+-      (last_preconvert_us_ > 0 && started_us - last_preconvert_us_ <
+-       1000000 / wants.max_framerate_fps)) { RecordDrop(); return; }
++  if (wants.max_pixel_count <= 0) {
++    preconvert_gate_.Reset(); RecordDrop(); return;
++  }
++  if (!preconvert_gate_.ShouldDeliver(started_us, wants.max_framerate_fps)) {
++    RecordDrop(); return;
++  }
+   const int64_t pixels_wanted = wants.max_pixel_count;
+   if (int64_t{output_width} * output_height > pixels_wanted) {
+     const double ratio = std::sqrt(static_cast<double>(pixels_wanted) /
+@@ -260,7 +346,6 @@
+     output_height = static_cast<int>(output_height * ratio) & ~1;
+     if (output_width < 2 || output_height < 2) { RecordDrop(); return; }
+   }
+-  last_preconvert_us_ = started_us;
+   auto buffer = buffer_pool_.Get(output_width, output_height);
+   if (!buffer) { RecordDrop(); return; }
+   const uint8_t* pixels = frame->data() + static_cast<std::ptrdiff_t>(y_) * frame->stride() +
+@@ -290,6 +375,30 @@
+       .set_timestamp_us(webrtc::TimeMicros()).set_rotation(webrtc::kVideoRotation_0).build());
+ }
+ 
++#ifdef WEBRTC_WIN
++void RTCDesktopCapturerImpl::OnNativeFrame(
++    webrtc::scoped_refptr<desktop_d3d11::Buffer> frame) {
++  recovery_.Frame(webrtc::TimeMillis(), static_cast<int>(Backend::kDxgi));
++  {
++    std::lock_guard<std::mutex> lock(health_mutex_);
++    ++health_.frames_captured; ++health_.frames_delivered; ++health_.native_texture_frames;
++    if (last_identified_backend_ != Backend::kAuto &&
++        last_identified_backend_ != Backend::kDxgi) ++health_.backend_switches;
++    last_identified_backend_ = health_.active_backend = Backend::kDxgi;
++    health_.source_width = native_capturer_->source_width();
++    health_.source_height = native_capturer_->source_height();
++    health_.output_width = frame->width(); health_.output_height = frame->height();
++    health_.consecutive_errors = 0; health_.recovering = false;
++    if (health_.fallback_reason != FallbackReason::kBackendUnavailable)
++      health_.fallback_reason = FallbackReason::kNone;
++    health_.convert_time_us = 0; // GPU submission is included in capture_time_us.
++    last_frame_ms_ = webrtc::TimeMillis();
++  }
++  OnFrame(webrtc::VideoFrame::Builder().set_video_frame_buffer(std::move(frame))
++      .set_timestamp_us(webrtc::TimeMicros()).set_rotation(webrtc::kVideoRotation_0).build());
++}
++#endif
++
+ void RTCDesktopCapturerImpl::CaptureFrame(uint64_t generation) {
+   RTC_DCHECK_RUN_ON(thread_.get());
+   if (capture_state_ != CS_RUNNING || generation != capture_generation_) return;
+@@ -304,6 +413,29 @@
+     if (!success) { ++health_.capture_errors; health_.fallback_reason = FallbackReason::kCreateFailed; }
+     else if (backend != Backend::kGdi) health_.fallback_reason = FallbackReason::kCooldownProbe;
+   }
++#ifdef WEBRTC_WIN
++  if (native_capturer_) {
++    webrtc::scoped_refptr<desktop_d3d11::Buffer> frame;
++    const auto result = native_capturer_->Capture(&frame);
++    if (result == desktop_d3d11::Capturer::Result::kFrame) {
++      OnNativeFrame(std::move(frame));
++    } else if (result == desktop_d3d11::Capturer::Result::kOverloaded) {
++      std::lock_guard<std::mutex> lock(health_mutex_);
++      ++health_.frames_captured; ++health_.frames_dropped; ++health_.native_texture_drops;
++      last_frame_ms_ = webrtc::TimeMillis();
++    } else if (result == desktop_d3d11::Capturer::Result::kError ||
++        (result == desktop_d3d11::Capturer::Result::kNoFrame &&
++         webrtc::TimeMillis() - native_started_ms_ >= 2000)) {
++      RecordCaptureError(true);
++      native_capturer_.reset();
++      std::lock_guard<std::mutex> lock(health_mutex_);
++      ++health_.native_texture_errors;
++      health_.native_texture_unavailable_reason = 20;
++      health_.native_texture_active = false;
++      health_.active_backend = Backend::kAuto;
++    }
++  }
++#endif
+   if (capturer_) capturer_->CaptureFrame();
+   const int64_t elapsed_us = webrtc::TimeMicros() - started_us;
+   {
+diff --git a/src/rtc_desktop_media_list_impl.cc b/src/rtc_desktop_media_list_impl.cc
+--- a/src/rtc_desktop_media_list_impl.cc
++++ b/src/rtc_desktop_media_list_impl.cc
+@@ -39,7 +39,17 @@
+   options_ = webrtc::DesktopCaptureOptions::CreateDefault();
+   options_.set_detect_updated_region(true);
+ #ifdef WEBRTC_WIN
+-  options_.set_allow_directx_capturer(true);
++  // A process may own only one DXGI duplicator per output. Media lists live
++  // for the factory lifetime, so even source enumeration would otherwise
++  // reserve that output and make the real native capture fail E_INVALIDARG.
++  // GDI preserves the same device-index source IDs and thumbnail behavior.
++  options_.set_allow_directx_capturer(false);
++  options_.set_allow_cropping_window_capturer(false);
++#if defined(RTC_ENABLE_WIN_WGC)
++  options_.set_allow_wgc_screen_capturer(false);
++  options_.set_allow_wgc_window_capturer(false);
++  options_.set_allow_wgc_capturer_fallback(false);
++#endif
+ #endif
+ #ifdef WEBRTC_LINUX
+   if (type == kScreen) {
+diff --git a/src/rtc_video_frame_impl.h b/src/rtc_video_frame_impl.h
+--- a/src/rtc_video_frame_impl.h
++++ b/src/rtc_video_frame_impl.h
+@@ -1,6 +1,7 @@
+ #ifndef LIB_WEBRTC_VIDEO_FRAME_IMPL_HXX
+ #define LIB_WEBRTC_VIDEO_FRAME_IMPL_HXX
+ 
++#include <mutex>
+ #include "api/video/i420_buffer.h"
+ #include "api/video/video_frame_buffer.h"
+ #include "api/video/video_rotation.h"
+@@ -52,6 +53,9 @@
+   void set_rotation(webrtc::VideoRotation rotation) { rotation_ = rotation; }
+ 
+  private:
++  const webrtc::I420BufferInterface* ReadableI420() const;
++  mutable std::mutex conversion_mutex_;
++  mutable webrtc::scoped_refptr<webrtc::I420BufferInterface> readable_i420_;
+   webrtc::scoped_refptr<webrtc::VideoFrameBuffer> buffer_;
+   int64_t timestamp_us_ = 0;
+   webrtc::VideoRotation rotation_ = webrtc::kVideoRotation_0;
+diff --git a/src/rtc_video_frame_impl.cc b/src/rtc_video_frame_impl.cc
+--- a/src/rtc_video_frame_impl.cc
++++ b/src/rtc_video_frame_impl.cc
+@@ -31,35 +31,41 @@
+ 
+ int VideoFrameBufferImpl::height() const { return buffer_->height(); }
+ 
+-const uint8_t* VideoFrameBufferImpl::DataY() const {
+-  return buffer_->GetI420()->DataY();
++const webrtc::I420BufferInterface* VideoFrameBufferImpl::ReadableI420() const {
++  if (const auto* direct = buffer_->GetI420()) return direct;
++  std::lock_guard<std::mutex> lock(conversion_mutex_);
++  if (!readable_i420_) readable_i420_ = buffer_->ToI420();
++  return readable_i420_.get();
+ }
+ 
++const uint8_t* VideoFrameBufferImpl::DataY() const {
++  const auto* i420 = ReadableI420(); return i420 ? i420->DataY() : nullptr;
++}
+ const uint8_t* VideoFrameBufferImpl::DataU() const {
+-  return buffer_->GetI420()->DataU();
++  const auto* i420 = ReadableI420(); return i420 ? i420->DataU() : nullptr;
+ }
+-
+ const uint8_t* VideoFrameBufferImpl::DataV() const {
+-  return buffer_->GetI420()->DataV();
++  const auto* i420 = ReadableI420(); return i420 ? i420->DataV() : nullptr;
+ }
+-
+ int VideoFrameBufferImpl::StrideY() const {
+-  return buffer_->GetI420()->StrideY();
++  const auto* i420 = ReadableI420(); return i420 ? i420->StrideY() : 0;
+ }
+-
+ int VideoFrameBufferImpl::StrideU() const {
+-  return buffer_->GetI420()->StrideU();
++  const auto* i420 = ReadableI420(); return i420 ? i420->StrideU() : 0;
+ }
+-
+ int VideoFrameBufferImpl::StrideV() const {
+-  return buffer_->GetI420()->StrideV();
++  const auto* i420 = ReadableI420(); return i420 ? i420->StrideV() : 0;
+ }
+ 
+ int VideoFrameBufferImpl::ConvertToARGB(Type type, uint8_t* dst_buffer,
+                                         int dst_stride, int dest_width,
+                                         int dest_height) {
++  const auto* readable = ReadableI420();
++  if (!readable || !dst_buffer || dest_width < 1 || dest_height < 1 ||
++      dest_width > 32768 || dest_height > 32768 || dst_stride < dest_width * 4)
++    return -1;
+   webrtc::scoped_refptr<webrtc::I420Buffer> i420 =
+-      webrtc::I420Buffer::Rotate(*buffer_.get(), rotation_);
++      webrtc::I420Buffer::Rotate(*readable, rotation_);
+ 
+   webrtc::scoped_refptr<webrtc::I420Buffer> dest =
+       webrtc::I420Buffer::Create(dest_width, dest_height);
+diff --git a/src/internal/video_capturer.cc b/src/internal/video_capturer.cc
+--- a/src/internal/video_capturer.cc
++++ b/src/internal/video_capturer.cc
+@@ -41,7 +41,9 @@
+     // return scaled version.
+     webrtc::scoped_refptr<I420Buffer> scaled_buffer =
+         I420Buffer::Create(out_width, out_height);
+-    scaled_buffer->ScaleFrom(*frame.video_frame_buffer()->ToI420());
++    auto readable = frame.video_frame_buffer()->ToI420();
++    if (!readable) return; // Native readback can fail during desktop/device transitions.
++    scaled_buffer->ScaleFrom(*readable);
+     DeliverFrame(VideoFrame::Builder()
+                      .set_video_frame_buffer(scaled_buffer)
+                      .set_rotation(kVideoRotation_0)
+@@ -80,10 +82,12 @@
+     return true;
+   }
+ 
++  auto readable = frame.video_frame_buffer()->ToI420();
++  if (!readable) return false;
+   libwebrtc::scoped_refptr<libwebrtc::VideoFrameBufferImpl> input(
+       new libwebrtc::RefCountedObject<libwebrtc::VideoFrameBufferImpl>(
+           scoped_refptr<VideoFrameBuffer>(
+-              frame.video_frame_buffer()->ToI420())));
++              readable)));
+   input->set_rotation(frame.rotation());
+   input->set_timestamp_us(frame.timestamp_us());
+ 
+diff --git a/src/internal/desktop_capture_policy.h b/src/internal/desktop_capture_policy.h
+--- a/src/internal/desktop_capture_policy.h
++++ b/src/internal/desktop_capture_policy.h
+@@ -6,6 +6,37 @@
+ 
+ namespace libwebrtc {
+ namespace capture_policy {
++
++// Preserve fractional frame-period credit instead of restarting the interval
++// at every delivered frame. A 16ms capture timer must not halve a 60fps sink.
++class FrameRateGate {
++ public:
++  void Reset() { initialized_ = false; fps_ = 0; deadline_us_ = 0; }
++  bool ShouldDeliver(int64_t now_us, int fps) {
++    if (fps <= 0) { Reset(); return false; }
++    // VideoSinkWants uses INT_MAX for an unconstrained sink. Do not turn that
++    // sentinel into an artificial one-microsecond throttle.
++    if (fps > 1000000) { Reset(); return true; }
++    const int64_t interval_us = (int64_t{1000000} + fps - 1) / fps;
++    if (!initialized_ || fps != fps_ || now_us < last_sample_us_) {
++      fps_ = fps;
++      deadline_us_ = now_us;
++      initialized_ = true;
++    }
++    last_sample_us_ = now_us;
++    if (now_us < deadline_us_) return false;
++    // A pause/slow consumer cannot save up an unbounded burst of frame credit.
++    // Keep sub-period lateness, so integer capture ticks retain their phase.
++    if (now_us - deadline_us_ >= interval_us) deadline_us_ = now_us;
++    deadline_us_ += interval_us;
++    return true;
++  }
++ private:
++  bool initialized_ = false;
++  int fps_ = 0;
++  int64_t deadline_us_ = 0;
++  int64_t last_sample_us_ = 0;
++};
+ 
+ // Backend numbers match RTCDesktopCapturer::Backend. No OS APIs or clock are
+ // hidden here: fault recovery and fitting can be tested deterministically.
+diff --git a/src/internal/desktop_d3d11_capturer.h b/src/internal/desktop_d3d11_capturer.h
+new file mode 100644
+--- /dev/null
++++ b/src/internal/desktop_d3d11_capturer.h
+@@ -0,0 +1,349 @@
++// Copyright 2026 WebDesk contributors. SPDX-License-Identifier: BSD-3-Clause
++#ifndef LIBWEBRTC_INTERNAL_DESKTOP_D3D11_CAPTURER_H_
++#define LIBWEBRTC_INTERNAL_DESKTOP_D3D11_CAPTURER_H_
++#ifdef WEBRTC_WIN
++
++
++#include <d3d11.h>
++#include <dxgi1_2.h>
++#include <wrl/client.h>
++#include <array>
++#include <memory>
++#include <mutex>
++#include "include/rtc_desktop_d3d11_buffer.h"
++#include "src/internal/bounded_i420_pool.h"
++#include "src/internal/desktop_capture_policy.h"
++#include "modules/desktop_capture/win/screen_capture_utils.h"
++#include "third_party/libyuv/include/libyuv.h"
++
++namespace libwebrtc {
++namespace desktop_d3d11 {
++using Microsoft::WRL::ComPtr;
++struct ReadbackPool { std::mutex mutex; BoundedI420Pool buffers; };
++
++// Pixels remain immutable until every frame reference is released. An encoder
++// must retain this buffer while its MFT input sample still references texture().
++class Buffer : public webrtc::DesktopD3D11Buffer {
++ public:
++  Buffer(ComPtr<ID3D11Device> device, ComPtr<ID3D11DeviceContext> context,
++         ComPtr<ID3D11Texture2D> texture, int width, int height,
++         std::shared_ptr<ReadbackPool> readback_pool)
++      : device_(std::move(device)), context_(std::move(context)),
++        texture_(std::move(texture)), width_(width), height_(height),
++        readback_pool_(std::move(readback_pool)) {}
++  int width() const override { return width_; }
++  int height() const override { return height_; }
++  ID3D11Texture2D* texture() const override { return texture_.Get(); }
++  ID3D11Device* device() const { return device_.Get(); }
++  UINT subresource() const override { return 0; }
++  webrtc::scoped_refptr<webrtc::I420BufferInterface> ToI420() override {
++    std::lock_guard<std::mutex> lock(readback_mutex_);
++    if (readback_) return readback_;
++    webrtc::scoped_refptr<webrtc::I420Buffer> result;
++    {
++      std::lock_guard<std::mutex> pool_lock(readback_pool_->mutex);
++      result = readback_pool_->buffers.Get(width_, height_);
++    }
++    if (!result) return nullptr;
++    // A Buffer's device and dimensions are immutable. Keep one staging surface
++    // per bounded texture slot across ResetReadback(), avoiding a per-frame
++    // driver allocation on software/cross-adapter encoder fallback.
++    if (!staging_) {
++      D3D11_TEXTURE2D_DESC desc{}; texture_->GetDesc(&desc);
++      desc.Usage = D3D11_USAGE_STAGING; desc.BindFlags = 0;
++      desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ; desc.MiscFlags = 0;
++      if (FAILED(device_->CreateTexture2D(&desc, nullptr, &staging_))) return nullptr;
++    }
++    context_->CopyResource(staging_.Get(), texture_.Get());
++    D3D11_MAPPED_SUBRESOURCE mapped{};
++    if (FAILED(context_->Map(staging_.Get(), 0, D3D11_MAP_READ, 0, &mapped))) return nullptr;
++    const int code = libyuv::NV12ToI420(static_cast<const uint8_t*>(mapped.pData),
++        static_cast<int>(mapped.RowPitch),
++        static_cast<const uint8_t*>(mapped.pData) + mapped.RowPitch * height_,
++        static_cast<int>(mapped.RowPitch), result->MutableDataY(), result->StrideY(),
++        result->MutableDataU(), result->StrideU(), result->MutableDataV(), result->StrideV(),
++        width_, height_);
++    context_->Unmap(staging_.Get(), 0);
++    if (code != 0) return nullptr;
++    readback_ = result;
++    return readback_;
++  }
++  // Only the producer calls ResetReadback, after HasOneRef() proves there are
++  // no readers. No GPU output is reused while an encoder owns the frame.
++  void ResetReadback() { readback_ = nullptr; }
++ protected:
++  ~Buffer() override = default;
++ private:
++  ComPtr<ID3D11Device> device_;
++  ComPtr<ID3D11DeviceContext> context_;
++  ComPtr<ID3D11Texture2D> texture_;
++  ComPtr<ID3D11Texture2D> staging_;
++  const int width_, height_;
++  std::shared_ptr<ReadbackPool> readback_pool_;
++  std::mutex readback_mutex_;
++  webrtc::scoped_refptr<webrtc::I420BufferInterface> readback_;
++};
++
++struct TexturePool {
++  using Slot = webrtc::scoped_refptr<webrtc::RefCountedObject<Buffer>>;
++  std::array<Slot, 4> slots;
++  std::shared_ptr<ReadbackPool> readbacks = std::make_shared<ReadbackPool>();
++};
++
++// Exact device/format capabilities are probed. There is no texture readback on
++// the successful producer path: the D3D11 video processor scales BGRA to NV12.
++class Converter {
++ public:
++  bool Initialize(ComPtr<ID3D11Device> device, ComPtr<ID3D11DeviceContext> context,
++                  int input_width, int input_height, int output_width, int output_height,
++                  std::shared_ptr<TexturePool> pool = nullptr) {
++    if (pool) pool_ = std::move(pool);
++    device_ = std::move(device); context_ = std::move(context);
++    input_width_ = input_width; input_height_ = input_height;
++    output_width_ = output_width; output_height_ = output_height;
++    ComPtr<ID3D10Multithread> protection;
++    if (FAILED(context_.As(&protection))) return false;
++    protection->SetMultithreadProtected(TRUE);
++    if (FAILED(device_.As(&video_device_)) || FAILED(context_.As(&video_context_))) return false;
++    D3D11_VIDEO_PROCESSOR_CONTENT_DESC content{};
++    content.InputFrameFormat = D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE;
++    content.InputFrameRate = {60, 1}; content.OutputFrameRate = {60, 1};
++    content.InputWidth = input_width_; content.InputHeight = input_height_;
++    content.OutputWidth = output_width_; content.OutputHeight = output_height_;
++    content.Usage = D3D11_VIDEO_USAGE_PLAYBACK_NORMAL;
++    if (FAILED(video_device_->CreateVideoProcessorEnumerator(&content, &enumerator_))) return false;
++    UINT input_flags = 0, output_flags = 0;
++    if (FAILED(enumerator_->CheckVideoProcessorFormat(DXGI_FORMAT_B8G8R8A8_UNORM, &input_flags)) ||
++        !(input_flags & D3D11_VIDEO_PROCESSOR_FORMAT_SUPPORT_INPUT) ||
++        FAILED(enumerator_->CheckVideoProcessorFormat(DXGI_FORMAT_NV12, &output_flags)) ||
++        !(output_flags & D3D11_VIDEO_PROCESSOR_FORMAT_SUPPORT_OUTPUT) ||
++        FAILED(video_device_->CreateVideoProcessor(enumerator_.Get(), 0, &processor_))) return false;
++    video_context_->VideoProcessorSetStreamFrameFormat(processor_.Get(), 0,
++        D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE);
++    const RECT source{0, 0, input_width_, input_height_};
++    const RECT destination{0, 0, output_width_, output_height_};
++    video_context_->VideoProcessorSetStreamSourceRect(processor_.Get(), 0, TRUE, &source);
++    video_context_->VideoProcessorSetStreamDestRect(processor_.Get(), 0, TRUE, &destination);
++    video_context_->VideoProcessorSetOutputTargetRect(processor_.Get(), TRUE, &destination);
++    video_context_->VideoProcessorSetStreamAutoProcessingMode(processor_.Get(), 0, FALSE);
++    D3D11_VIDEO_PROCESSOR_COLOR_SPACE rgb{};
++    rgb.RGB_Range = 0; rgb.Nominal_Range = 2; // Full-range BGRA input.
++    D3D11_VIDEO_PROCESSOR_COLOR_SPACE nv12{};
++    nv12.YCbCr_Matrix = 0; nv12.Nominal_Range = 1; // BT.601, limited range.
++    video_context_->VideoProcessorSetStreamColorSpace(processor_.Get(), 0, &rgb);
++    video_context_->VideoProcessorSetOutputColorSpace(processor_.Get(), &nv12);
++    return true;
++  }
++  webrtc::scoped_refptr<Buffer> Convert(ID3D11Texture2D* input) {
++    overloaded_ = false;
++    D3D11_TEXTURE2D_DESC source{}; input->GetDesc(&source);
++    if (source.Width != static_cast<UINT>(input_width_) ||
++        source.Height != static_cast<UINT>(input_height_) ||
++        source.Format != DXGI_FORMAT_B8G8R8A8_UNORM) return nullptr;
++    Slot* available = nullptr;
++    for (auto& slot : pool_->slots) {
++      if (!slot || slot->HasOneRef()) { available = &slot; break; }
++    }
++    if (!available) { overloaded_ = true; return nullptr; }
++    overloaded_ = false;
++    if (*available && ((*available)->device() != device_.Get() ||
++        (*available)->width() != output_width_ || (*available)->height() != output_height_))
++      *available = nullptr;
++    if (!*available) {
++      D3D11_TEXTURE2D_DESC desc{};
++      desc.Width = output_width_; desc.Height = output_height_;
++      desc.MipLevels = 1; desc.ArraySize = 1; desc.Format = DXGI_FORMAT_NV12;
++      desc.SampleDesc.Count = 1; desc.Usage = D3D11_USAGE_DEFAULT;
++      desc.BindFlags = D3D11_BIND_RENDER_TARGET;
++      ComPtr<ID3D11Texture2D> texture;
++      if (FAILED(device_->CreateTexture2D(&desc, nullptr, &texture))) return nullptr;
++      *available = webrtc::scoped_refptr<webrtc::RefCountedObject<Buffer>>(
++          new webrtc::RefCountedObject<Buffer>(device_, context_, texture,
++                                               output_width_, output_height_, pool_->readbacks));
++    }
++    (*available)->ResetReadback();
++    D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC input_desc{};
++    input_desc.ViewDimension = D3D11_VPIV_DIMENSION_TEXTURE2D;
++    ComPtr<ID3D11VideoProcessorInputView> input_view;
++    D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC output_desc{};
++    output_desc.ViewDimension = D3D11_VPOV_DIMENSION_TEXTURE2D;
++    ComPtr<ID3D11VideoProcessorOutputView> output_view;
++    if (FAILED(video_device_->CreateVideoProcessorInputView(input, enumerator_.Get(),
++            &input_desc, &input_view)) ||
++        FAILED(video_device_->CreateVideoProcessorOutputView((*available)->texture(),
++            enumerator_.Get(), &output_desc, &output_view))) return nullptr;
++    D3D11_VIDEO_PROCESSOR_STREAM stream{};
++    stream.Enable = TRUE; stream.pInputSurface = input_view.Get();
++    if (FAILED(video_context_->VideoProcessorBlt(processor_.Get(), output_view.Get(),
++                                               0, 1, &stream))) return nullptr;
++    return *available;
++  }
++  bool overloaded() const { return overloaded_; }
++ private:
++  using Slot = webrtc::scoped_refptr<webrtc::RefCountedObject<Buffer>>;
++  std::shared_ptr<TexturePool> pool_ = std::make_shared<TexturePool>();
++  ComPtr<ID3D11Device> device_;
++  ComPtr<ID3D11DeviceContext> context_;
++  ComPtr<ID3D11VideoDevice> video_device_;
++  ComPtr<ID3D11VideoContext> video_context_;
++  ComPtr<ID3D11VideoProcessorEnumerator> enumerator_;
++  ComPtr<ID3D11VideoProcessor> processor_;
++  int input_width_ = 0, input_height_ = 0, output_width_ = 0, output_height_ = 0;
++  bool overloaded_ = false;
++};
++
++// Diagnostic codes are stable, numeric and safe to expose over the plugin.
++// 1..5 are policy guards set by RTCDesktopCapturerImpl.
++struct MonitorSelection {
++  HMONITOR monitor = nullptr;
++  uint32_t count = 0;
++};
++inline BOOL CALLBACK CountDesktopMonitors(HMONITOR monitor, HDC, LPRECT, LPARAM data) {
++  auto* selection = reinterpret_cast<MonitorSelection*>(data);
++  ++selection->count;
++  selection->monitor = monitor;
++  return TRUE;
++}
++inline bool ResolveSingleDesktopMonitor(HMONITOR* monitor, uint32_t* reason) {
++  MonitorSelection selection;
++  if (!EnumDisplayMonitors(nullptr, nullptr, CountDesktopMonitors,
++                           reinterpret_cast<LPARAM>(&selection)) || !selection.count) {
++    *reason = 6; return false;
++  }
++  if (selection.count != 1) { *reason = 7; return false; }
++  MONITORINFO info{}; info.cbSize = sizeof(info);
++  if (!GetMonitorInfoW(selection.monitor, &info)) { *reason = 8; return false; }
++  // Match full-desktop geometry, including a nonzero virtual-desktop origin.
++  // An adapter's active device count is not a count of distinct monitors.
++  if (info.rcMonitor.left != GetSystemMetrics(SM_XVIRTUALSCREEN) ||
++      info.rcMonitor.top != GetSystemMetrics(SM_YVIRTUALSCREEN) ||
++      info.rcMonitor.right - info.rcMonitor.left != GetSystemMetrics(SM_CXVIRTUALSCREEN) ||
++      info.rcMonitor.bottom - info.rcMonitor.top != GetSystemMetrics(SM_CYVIRTUALSCREEN)) {
++    *reason = 7; return false;
++  }
++  *monitor = selection.monitor;
++  *reason = 0;
++  return true;
++}
++
++class Capturer {
++ public:
++  enum class Result { kFrame, kNoFrame, kOverloaded, kError };
++  static std::unique_ptr<Capturer> Create(webrtc::DesktopCapturer::SourceId source,
++                                         uint32_t max_width, uint32_t max_height,
++                                         std::shared_ptr<TexturePool> pool,
++                                         uint32_t* unavailable_reason = nullptr,
++                                         int64_t* error_hresult = nullptr) {
++    auto result = std::unique_ptr<Capturer>(new Capturer());
++    const bool initialized = result->Initialize(source, max_width, max_height, std::move(pool));
++    if (unavailable_reason) *unavailable_reason = initialized ? 0 : result->unavailable_reason_;
++    if (error_hresult) *error_hresult = initialized ? 0 : static_cast<int64_t>(result->error_hresult_);
++    if (!initialized) return nullptr;
++    return result;
++  }
++  ~Capturer() {
++    if (frame_acquired_) duplication_->ReleaseFrame();
++  }
++  Result Capture(webrtc::scoped_refptr<Buffer>* output) {
++    if (full_desktop_ && GetSystemMetrics(SM_CMONITORS) != 1) return Result::kError;
++    if (!pending_texture_) {
++      DXGI_OUTDUPL_FRAME_INFO info{};
++      ComPtr<IDXGIResource> resource;
++      const HRESULT acquired = duplication_->AcquireNextFrame(0, &info, &resource);
++      if (acquired == DXGI_ERROR_WAIT_TIMEOUT) {
++        if (!last_) return Result::kNoFrame;
++        *output = last_; return Result::kFrame;
++      }
++      if (FAILED(acquired)) return Result::kError;
++      frame_acquired_ = true;
++      if (FAILED(resource.As(&pending_texture_))) {
++        duplication_->ReleaseFrame(); frame_acquired_ = false;
++        return Result::kError;
++      }
++    }
++    auto frame = converter_.Convert(pending_texture_.Get());
++    if (!frame && converter_.overloaded()) {
++      // Keep exactly one acquired source surface until a slot is free. If we
++      // released the only dirty update here, a static desktop could thereafter
++      // time out forever while we kept publishing an older image.
++      return Result::kOverloaded;
++    }
++    pending_texture_.Reset();
++    const HRESULT released = duplication_->ReleaseFrame();
++    frame_acquired_ = false;
++    if (!frame || FAILED(released)) return Result::kError;
++    last_ = frame; *output = std::move(frame);
++    return Result::kFrame;
++  }
++  int source_width() const { return width_; }
++  int source_height() const { return height_; }
++ private:
++  bool Initialize(webrtc::DesktopCapturer::SourceId source, uint32_t max_width, uint32_t max_height,
++                  std::shared_ptr<TexturePool> pool) {
++    full_desktop_ = source == -1;
++    HMONITOR selected = nullptr;
++    if (full_desktop_) {
++      if (!ResolveSingleDesktopMonitor(&selected, &unavailable_reason_)) return false;
++    } else if (!webrtc::GetHmonitorFromDeviceIndex(source, &selected) || !selected) {
++      return Fail(8);
++    }
++    ComPtr<IDXGIFactory1> factory;
++    HRESULT status = CreateDXGIFactory1(IID_PPV_ARGS(&factory));
++    if (FAILED(status)) return Fail(9, status);
++    for (UINT a = 0;; ++a) {
++      ComPtr<IDXGIAdapter1> adapter;
++      if (factory->EnumAdapters1(a, &adapter) == DXGI_ERROR_NOT_FOUND) break;
++      if (!adapter) return Fail(10);
++      for (UINT o = 0;; ++o) {
++        ComPtr<IDXGIOutput> output;
++        if (adapter->EnumOutputs(o, &output) == DXGI_ERROR_NOT_FOUND) break;
++        if (!output) return Fail(11);
++        DXGI_OUTPUT_DESC desc{};
++        if (FAILED(output->GetDesc(&desc)) || desc.Monitor != selected) continue;
++        // Rotation and virtual-desktop composition stay on the established CPU
++        // engine path. Never silently capture a different output or orientation.
++        if (!desc.AttachedToDesktop) return Fail(13);
++        if (desc.Rotation != DXGI_MODE_ROTATION_IDENTITY &&
++            desc.Rotation != DXGI_MODE_ROTATION_UNSPECIFIED) return Fail(14);
++        ComPtr<ID3D11Device> device;
++        ComPtr<ID3D11DeviceContext> context;
++        D3D_FEATURE_LEVEL feature{};
++        status = D3D11CreateDevice(adapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr,
++              D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_VIDEO_SUPPORT,
++              nullptr, 0, D3D11_SDK_VERSION, &device, &feature, &context);
++        if (FAILED(status)) return Fail(15, status);
++        ComPtr<IDXGIOutput1> output1;
++        status = output.As(&output1);
++        if (FAILED(status)) return Fail(16, status);
++        status = output1->DuplicateOutput(device.Get(), &duplication_);
++        if (FAILED(status)) return Fail(17, status);
++        DXGI_OUTDUPL_DESC duplicate_desc{}; duplication_->GetDesc(&duplicate_desc);
++        width_ = static_cast<int>(duplicate_desc.ModeDesc.Width);
++        height_ = static_cast<int>(duplicate_desc.ModeDesc.Height);
++        int width = 0, height = 0;
++        if (!capture_policy::Fit(width_, height_, max_width, max_height, &width, &height)) return Fail(18);
++        if (!converter_.Initialize(device, context, width_, height_, width, height, std::move(pool)))
++          return Fail(19);
++        return true;
++      }
++    }
++    return Fail(12);
++  }
++  bool Fail(uint32_t reason, HRESULT status = S_OK) {
++    unavailable_reason_ = reason; error_hresult_ = status; return false;
++  }
++  uint32_t unavailable_reason_ = 0;
++  HRESULT error_hresult_ = S_OK;
++  bool full_desktop_ = false;
++  bool frame_acquired_ = false;
++  ComPtr<ID3D11Texture2D> pending_texture_;
++  int width_ = 0, height_ = 0;
++  ComPtr<IDXGIOutputDuplication> duplication_;
++  Converter converter_;
++  webrtc::scoped_refptr<Buffer> last_;
++};
++
++}  // namespace desktop_d3d11
++}  // namespace libwebrtc
++#endif  // WEBRTC_WIN
++#endif

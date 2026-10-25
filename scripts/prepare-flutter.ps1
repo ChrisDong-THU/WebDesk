@@ -31,22 +31,9 @@ if ($LASTEXITCODE -ne 0 -or $tagCommit -ne $manifest.flutter.commit) {
 }
 Ensure-Checkout $manifest.flutterWebrtc $plugin
 # Keep fixes separate so existing checkouts with the base patch can upgrade.
-foreach ($patchName in @('flutter-webrtc.patch', 'flutter-webrtc-task-runner.patch', 'flutter-webrtc-capture-lifetime.patch', 'flutter-webrtc-external-audio.patch')) {
-  $patch = Join-Path $root "native\flutter\$patchName"
-  # A fresh checkout is expected to fail the reverse-patch probe. Windows
-  # PowerShell 5 turns redirected native stderr into a terminating error under
-  # Stop, so inspect the exit code without aborting before the forward apply.
-  $savedErrorPreference = $ErrorActionPreference
-  try {
-    $ErrorActionPreference = 'Continue'
-    & git -C $plugin apply --reverse --check $patch 2>$null
-    $alreadyPatched = $LASTEXITCODE -eq 0
-  } finally { $ErrorActionPreference = $savedErrorPreference }
-  if (-not $alreadyPatched) {
-    Invoke-Git @('-C', $plugin, 'apply', '--check', $patch)
-    Invoke-Git @('-C', $plugin, 'apply', $patch)
-  }
-}
+. (Join-Path $PSScriptRoot 'apply-patch-stack.ps1')
+$pluginPatches = @('flutter-webrtc.patch', 'flutter-webrtc-task-runner.patch', 'flutter-webrtc-capture-lifetime.patch', 'flutter-webrtc-external-audio.patch', 'flutter-webrtc-media-policy.patch') | ForEach-Object { Join-Path $root "native\flutter\$_" }
+ApplyPatchStack $plugin $pluginPatches
 # Pin and verify the binary before upstream CMake sees its download cache.
 $archive = Join-Path $plugin 'third_party\downloads\libwebrtc-win-x64-release.zip'
 if (-not (Test-Path -LiteralPath $archive)) {

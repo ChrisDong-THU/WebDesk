@@ -6,6 +6,7 @@ $buildRoot = Join-Path $root '.tools\webrtc-build'
 $artifact = Join-Path $buildRoot 'external-audio'
 $patch = Join-Path $root 'native\flutter\libwebrtc-external-audio.patch'
 $capturePatch = Join-Path $root 'native\flutter\libwebrtc-desktop-capture.patch'
+$mediaPatches = @('libwebrtc-hardware-video.patch', 'libwebrtc-capture-policy.patch', 'libwebrtc-desktop-gpu-capture.patch', 'libwebrtc-nvenc-video.patch') | ForEach-Object { Join-Path $root "native\flutter\$_" }
 $recipe = @{
   wrapper = $spec.wrapperCommit
   engine = $spec.engineCommit
@@ -13,11 +14,13 @@ $recipe = @{
   patch = (Get-FileHash -LiteralPath $patch -Algorithm SHA256).Hash
   capturePatch = (Get-FileHash -LiteralPath $capturePatch -Algorithm SHA256).Hash
   script = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash
+  patchVerifier = (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot 'apply-patch-stack.ps1') -Algorithm SHA256).Hash
 }
+foreach ($mediaPatch in $mediaPatches) { $recipe[(Split-Path $mediaPatch -Leaf)] = (Get-FileHash -LiteralPath $mediaPatch -Algorithm SHA256).Hash }
 $recordPath = Join-Path $artifact 'build.json'
 $dll = Join-Path $artifact 'libwebrtc.dll'
 $importLibrary = Join-Path $artifact 'libwebrtc.dll.lib'
-if ((Test-Path -LiteralPath $recordPath) -and (Test-Path -LiteralPath $dll) -and (Test-Path -LiteralPath $importLibrary)) {
+if ((Test-Path -LiteralPath $recordPath) -and (Test-Path -LiteralPath $dll) -and (Test-Path -LiteralPath $importLibrary) -and (Test-Path -LiteralPath (Join-Path $artifact 'include\rtc_desktop_d3d11_buffer.h'))) {
   $record = Get-Content -LiteralPath $recordPath -Raw | ConvertFrom-Json
   $matches = $true
   foreach ($key in $recipe.Keys) { if ($record.recipe.$key -ne $recipe[$key]) { $matches = $false } }
@@ -54,6 +57,7 @@ function ApplyPatch([string]$Directory, [string]$PatchPath) {
     Invoke-WebRtcGit @('-C', $Directory, 'apply', $PatchPath)
   }
 }
+. (Join-Path $PSScriptRoot 'apply-patch-stack.ps1')
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 $vs = & $vswhere -latest -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
 if (-not $vs) { throw 'Building WebRTC requires Visual Studio 2022 C++ Build Tools and Windows SDK 10.0.26100.0.' }
@@ -89,8 +93,7 @@ try {
   foreach ($name in @('custom_audio_source_m150.patch', 'add_libwebrtc_build_target.patch', 'allow_176k4_192k_shared_mode_formats.patch')) {
     ApplyPatch $engine (Join-Path $wrapper "patches\$name")
   }
-  ApplyPatch $wrapper $patch
-  ApplyPatch $wrapper $capturePatch
+  ApplyPatchStack $wrapper (@($patch, $capturePatch) + $mediaPatches)
   & (Join-Path $depot 'gclient.bat') runhooks
   if ($LASTEXITCODE -ne 0) { throw 'WebRTC toolchain setup failed' }
   $python = & (Join-Path $depot 'vpython3.bat') -vpython-spec (Join-Path $engine '.vpython3') -c 'import sys; print(sys.executable)'
@@ -114,6 +117,7 @@ try {
   New-Item -ItemType Directory -Force $artifact | Out-Null
   Copy-Item -LiteralPath (Join-Path $output 'libwebrtc.dll') -Destination $dll
   Copy-Item -LiteralPath (Join-Path $output 'libwebrtc.dll.lib') -Destination $artifact
+  Copy-Item -LiteralPath (Join-Path $wrapper 'include') -Destination $artifact -Recurse -Force
   @{
     recipe = $recipe
     sha256 = (Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash

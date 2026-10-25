@@ -1,0 +1,21 @@
+# Generated upstream snapshots and retained analysis evidence keep their hashes.
+.tools/
+node_modules/
+dist/
+flutter-release/
+server-release/
+test-results/
+coverage/
+src/billd/
+electron-main/billd/
+server/billd/
+third_party/
+docs/evidence/
+docs/billd-*.md
+docs/webdesk-*-20261025.md
+docs/webdesk-media-alignment.md
+# Native/Dart files use their language tools; SDKs and artifacts are ignored by git.
+desktop/
+native/
+*.md
+deploy/*.conf.example

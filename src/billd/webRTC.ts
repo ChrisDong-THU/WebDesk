@@ -407,7 +407,7 @@ class WebRTCClass {
             msg: 'iceConnectionState:failed',
             type: 'error',
           });
-          this.close();
+          // Recovery timeout is owned by BilldDeskRuntime.
         }
         if (iceConnectionState === 'disconnected') {
           // 测试不再活跃，这可能是一个暂时的状态，可以自我恢复。
@@ -471,7 +471,7 @@ class WebRTCClass {
             msg: 'connectionState:failed',
             type: 'error',
           });
-          this.close();
+          // Recovery timeout is owned by BilldDeskRuntime.
         }
       }
     );

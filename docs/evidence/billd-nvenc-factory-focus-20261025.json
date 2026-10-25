@@ -1,0 +1,141 @@
+{
+  "target": "D:\\BilldDesk\\libwebrtc.dll",
+  "sha256": "9d7933cc2eefe111502e7ef5aef23a07a943209590ffb781d3f494149d7392c1",
+  "rea_command_observations": [
+    {
+      "path": "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-headers.json",
+      "evidence_id": "ev_df9826857fcdf71faba9e07be8e651957accd96a24edc3c06618e1dfbc6fb6a7",
+      "operation": "inspect_with_objdump",
+      "subject": {
+        "name": "libwebrtc.dll",
+        "digest": {
+          "sha256": "9d7933cc2eefe111502e7ef5aef23a07a943209590ffb781d3f494149d7392c1"
+        },
+        "local_path": "D:\\BilldDesk\\libwebrtc.dll",
+        "format": "unknown",
+        "architecture": null
+      },
+      "limitations": [
+        "The executable version and supported formats are reported as unknown because no reliable version probe was performed.",
+        "A non-zero process exit is preserved as an observed command result.",
+        "When both are available, pre-run and post-run digests detect artifact changes across the provider call but cannot prove the exact bytes consumed during the call."
+      ],
+      "artifact_changed": false,
+      "completion_status": "complete",
+      "output_truncated": false
+    },
+    {
+      "path": "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-sections.json",
+      "evidence_id": "ev_f116d1cd6c21c23a0427228500cc1aaaada4f276e5b130be99e2062158366db5",
+      "operation": "inspect_with_objdump",
+      "subject": {
+        "name": "libwebrtc.dll",
+        "digest": {
+          "sha256": "9d7933cc2eefe111502e7ef5aef23a07a943209590ffb781d3f494149d7392c1"
+        },
+        "local_path": "D:\\BilldDesk\\libwebrtc.dll",
+        "format": "unknown",
+        "architecture": null
+      },
+      "limitations": [
+        "The executable version and supported formats are reported as unknown because no reliable version probe was performed.",
+        "A non-zero process exit is preserved as an observed command result.",
+        "When both are available, pre-run and post-run digests detect artifact changes across the provider call but cannot prove the exact bytes consumed during the call."
+      ],
+      "artifact_changed": false,
+      "completion_status": "complete",
+      "output_truncated": false
+    },
+    {
+      "path": "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-symbols-recheck.json",
+      "evidence_id": "ev_25c6f3b651daa6c1bdc199df605863336fb4db2ffa00591e2baf64b33a272c31",
+      "operation": "inspect_with_objdump",
+      "subject": {
+        "name": "libwebrtc.dll",
+        "digest": {
+          "sha256": "9d7933cc2eefe111502e7ef5aef23a07a943209590ffb781d3f494149d7392c1"
+        },
+        "local_path": "D:\\BilldDesk\\libwebrtc.dll",
+        "format": "unknown",
+        "architecture": null
+      },
+      "limitations": [
+        "The executable version and supported formats are reported as unknown because no reliable version probe was performed.",
+        "A non-zero process exit is preserved as an observed command result.",
+        "When both are available, pre-run and post-run digests detect artifact changes across the provider call but cannot prove the exact bytes consumed during the call."
+      ],
+      "artifact_changed": false,
+      "completion_status": "complete",
+      "output_truncated": false
+    }
+  ],
+  "supplemental_disassembly_provider": "pefile PE unwind extent + Capstone; not REA decompilation",
+  "observations": [
+    {
+      "claim": "NVENC factory has native H264/H265/AV1 constructor branches; H264 branch passes codec type 4. This is conditional capability, not application default preference.",
+      "rva": [
+        "0x566eb0",
+        "0x567140",
+        "0x567272",
+        "0x5673a4",
+        "0x5673c1"
+      ],
+      "file": "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x566eb0.asm"
+    },
+    {
+      "claim": "NVENC initialization failure calls same-H264 software fallback; codec type other than 4 has no software fallback in this routine.",
+      "rva": [
+        "0x56595d",
+        "0x565178",
+        "0x56521a",
+        "0x565370"
+      ],
+      "file": "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x565140.asm"
+    },
+    {
+      "claim": "H264 native initialization selects GUID e7cbc309-4f7a-4b89-af2a-d537c92be310 (NV_ENC_H264_PROFILE_HIGH_GUID). This is a driver configuration branch, not proof of negotiated/default/runtime profile or transmitted SPS.",
+      "rva": [
+        "0x562cfd",
+        "0x562d08",
+        "0x562d25",
+        "0x11805c8"
+      ],
+      "file": "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x562a50.asm"
+    },
+    {
+      "claim": "SetRates delegates to existing software encoder if present; otherwise updates applied bitrate/FPS and calls native reconfigure. Steps and thresholds are conditional on mode fields.",
+      "rva": [
+        "0x566b81",
+        "0x566bc0",
+        "0x566d93",
+        "0x566da9"
+      ],
+      "file": "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x566b60.asm"
+    },
+    {
+      "claim": "Native reconfigure builds API structure, calls encoder function-table entry, logs status/forceIDR/reset; not enough evidence to claim all runtime reconfigure errors trigger software fallback.",
+      "rva": [
+        "0x56395e",
+        "0x563a66",
+        "0x563a7f",
+        "0x563ae6"
+      ],
+      "file": "E:\\VSCodeProj\\WebDesk\\.tools\\rea-billd-package\\libwebrtc-0x563640.asm"
+    }
+  ],
+  "unknowns": [
+    "Billd default codec order and active remote RTC settings were not recovered.",
+    "No Billd runtime target execution, real session or performance comparison was performed.",
+    "Transmitted SPS/PPS profile and exact repetition behavior are not established by the selected byte ranges.",
+    "Only direct literal branches/references are covered; indirect dispatch can leave control-flow and failure coverage incomplete.",
+    "REA deep native providers are not configured in this session; the new REA command verifies symbol availability and original-file identity, while function claims above are explicitly supplemental Capstone observations."
+  ],
+  "webdesk_source_audit": {
+    "native_codec_fallback": "Nested encoder implementations remain H264: NVENC -> MF -> builtin H264. They do not require renegotiation to VP8.",
+    "dart_codec_switch": "adaptive_video.dart marks H264 expensive after three CPU-pressure samples, remote_session.dart reorders codecs and offers again, allowing VP8. A hardware flag is not used by the Dart pressure predicate.",
+    "hardware_stats": "NVENC GetEncoderInfo reports initialized&&!failed. WebRTC propagates this to powerEfficientEncoder; its own hardware CPU-overuse thresholds are 150/200 percent, but Dart uses an independent 85 percent utilisation threshold.",
+    "recommendation": "Choose H264 protocol preference independently of hardware availability; retain same-H264 software fallback. Apply pressure to capture/frame/bitrate budgets, not an automatic H264-to-VP8 codec change. Do not label this as Billd default.",
+    "upstream_failure_boundary": "If all H264 implementation initialization fails and switch_encoder_on_init_failures is enabled, upstream VideoStreamEncoder requests an encoder switch (video_stream_encoder.cc:1533-1540); ApplyEncoderSwitch may remove the current negotiated codec and choose the next (webrtc_video_engine.cc:1278-1288). WEBRTC_VIDEO_CODEC_ENCODER_FAILURE during Encode also reaches this path (video_stream_encoder.cc:2215-2220). Therefore a generic failure-level cross-codec fallback remains possible, but hardware unavailability alone does not require it.",
+    "fallback_encoder_metadata": "VideoEncoderSoftwareFallbackWrapper::GetEncoderInfo chooses active fallback/main EncoderInfo (api/video_codecs/video_encoder_software_fallback_wrapper.cc:458-465). It does not pin a stale hardware flag."
+  }
+}

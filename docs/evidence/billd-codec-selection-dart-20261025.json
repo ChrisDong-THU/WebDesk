@@ -1,0 +1,766 @@
+{
+  "schema": "webdesk.supplemental-shipped-artifact-evidence.v1",
+  "date": "2026-10-25",
+  "target": {
+    "path": "D:\\BilldDesk\\data\\app.so",
+    "size": 9012144,
+    "sha256": "a33236647ebc61852fb517751d41dd3537d592b1b7c920e5f35de0327fe329fb",
+    "product": "BilldDesk Windows 0.609.0+1",
+    "snapshot_version": "1ce86630892e2dca9a8543fdb8ed8e22",
+    "snapshot_features": "product no-code_comments dwarf_stack_traces_mode dedup_instructions no-tsan no-msan no-shared_data x64 windows no-compressed-pointers"
+  },
+  "method": {
+    "kind": "Supplemental offline Python snapshot parsing and Capstone x64 decoding; NOT REA decompilation and NOT live target execution",
+    "source_reference_tag": "dart-lang/sdk 3.10.7",
+    "version_boundary": "The snapshot hash is compatible with this format family; the exact Dart SDK/Flutter semantic version is not established by this work.",
+    "source_urls": [
+      "https://raw.githubusercontent.com/dart-lang/sdk/3.10.7/runtime/vm/app_snapshot.cc",
+      "https://raw.githubusercontent.com/dart-lang/sdk/3.10.7/runtime/vm/datastream.h",
+      "https://raw.githubusercontent.com/dart-lang/sdk/3.10.7/runtime/vm/raw_object.h",
+      "https://raw.githubusercontent.com/dart-lang/sdk/3.10.7/runtime/vm/compiler/assembler/object_pool_builder.h"
+    ],
+    "parsed_and_validated": {
+      "isolate_base_refs": 1180,
+      "isolate_total_refs": 90044,
+      "allocation_clusters": 577,
+      "allocation_count_equality": true,
+      "vm_base_refs": 99,
+      "vm_total_refs": 1180,
+      "vm_clusters": 5,
+      "global_pool_entries": 34260,
+      "global_pool_unique_valid_candidate": true,
+      "pool_stream_start": "0xd581e",
+      "pool_stream_end_exclusive": "0xf05a1",
+      "instruction_table_data": "0x11e150",
+      "instruction_table_entries": 22811,
+      "first_entry_with_code": 17072,
+      "retained_code_count": 5739,
+      "initial_fill_clusters_parsed": 8,
+      "parsed_function_objects": 6632,
+      "parsed_code_objects": 5739,
+      "function_names_validated_as_string_refs_or_vm_refs": true
+    },
+    "not_parsed": [
+      "Full heap fills after the Function cluster",
+      "Full class/field/library object graph",
+      "All exception/source maps",
+      "All dynamic dispatch targets",
+      "Runtime object state"
+    ]
+  },
+  "prior_rea_evidence": [
+    {
+      "id": "ev_a4137af283ee14a843863a963ea21a3960e3a0795af9dc47e0d0748c0d665697",
+      "operation": "inspect_with_objdump section_headers",
+      "path": ".tools/rea-billd-package/dart-sections.json",
+      "scope": "ELF identity/layout only; does not originate the supplemental reconstruction below"
+    }
+  ],
+  "findings": [
+    {
+      "id": "BD-DART-CODEC-01",
+      "evidence_kind": "observed-instructions",
+      "claim": "The codec-list routine constructs a ten-element fallback list in executable code, in the following exact order. This is a fallback in this routine, not proof of the effective user/server/factory default.",
+      "spans": [
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x7c4713",
+          "end_exclusive": "0x7c47ba",
+          "size": 167,
+          "sha256": "737cc5c989826349a1536f89af367948d87bfb6a01080dee29043fa390a08c5a"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x7c4851",
+          "end_exclusive": "0x7c488a",
+          "size": 57,
+          "sha256": "9f00618112718c0c7d5409a74601f1e6b33e5eda1917b5d51c428b1935c04781"
+        }
+      ],
+      "order": [
+        "H265",
+        "H264",
+        "AV1",
+        "VP9",
+        "VP8",
+        "opus",
+        "G722",
+        "PCMU",
+        "PCMA",
+        "CN"
+      ],
+      "routine": {
+        "file": "D:\\BilldDesk\\data\\app.so",
+        "start": "0x7c46f0",
+        "end_exclusive": "0x7c4898",
+        "size": 424,
+        "sha256": "df120a7d02376597e82512f076d0b8ddd7583eb3b9193296d77f6e0ebfa97253"
+      },
+      "fallback_path": "Nonlinear handler-shaped entry at 0x7c4851 restores the frame, enters the VM exception helper, and loads the prebuilt list. The exception table itself was not fully deserialized."
+    },
+    {
+      "id": "BD-DART-CODEC-02",
+      "evidence_kind": "observed-instructions-and-derived-semantics",
+      "claim": "videoCodecs and videoCodecsSort are fetched separately and passed to 0x7c46f0 on both Answer and Offer handling paths. Both strings are split by comma. The resulting list follows videoCodecsSort order while retaining enabled membership, via two ordered filters rather than a numeric/device-scoring comparator.",
+      "spans": [
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x7c27fc",
+          "end_exclusive": "0x7c28d5",
+          "size": 217,
+          "sha256": "919141ad962ad110b8c69bc5f6b25163234c6b51f00c0ba812176dfd72f2e95d"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x7c9dab",
+          "end_exclusive": "0x7c9e84",
+          "size": 217,
+          "sha256": "a7549cc5d6a8fb47633c186130645fea47a64fba879b7567d5fb86d1c72d94c5"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x7c47ba",
+          "end_exclusive": "0x7c484c",
+          "size": 146,
+          "sha256": "361b6620593c7bf8ca97dc484339cdb330b5cf825934a618d44ffa3a0d595369"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x541e6c",
+          "end_exclusive": "0x541f00",
+          "size": 148,
+          "sha256": "8ea13c24260ce996526cdb152573fbc99c925026281bc8cd02f931f76d04c568"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x541f00",
+          "end_exclusive": "0x541f34",
+          "size": 52,
+          "sha256": "067e2ecafe812997c7d8825789fdaf924f26553467a67919c53c2963c2501a39"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x434df8",
+          "end_exclusive": "0x434f44",
+          "size": 332,
+          "sha256": "f4de0e95128932786d404e37a15697533242a2cb5715b46b81f2ccfd2d56d8a8"
+        }
+      ],
+      "comma_vm_object": {
+        "file": "D:\\BilldDesk\\data\\app.so",
+        "start": "0x47a0",
+        "end_exclusive": "0x47c0",
+        "size": 32,
+        "sha256": "76e99eeb107229d2eb8d462a6571ceab31cda02084623010b75bac4e495d0bcc"
+      },
+      "comma_vm_ref_id": 391,
+      "predicate_function_ref": 50992,
+      "predicate_entry": "0x541f00",
+      "predicate_target": "0x434df8: bounded-by-list-length linear equality membership search",
+      "derived_pseudocode": [
+        "fallback = [H265,H264,AV1,VP9,VP8,opus,G722,PCMU,PCMA,CN]",
+        "try:",
+        "  enabled = videoCodecs.split(\",\")",
+        "  ordered = videoCodecsSort.split(\",\")",
+        "  common = enabled.where((name) => ordered.contains(name)).toList()",
+        "  result = ordered.where((name) => common.contains(name)).toList()",
+        "catch: result = fallback",
+        "return result"
+      ],
+      "semantics_limits": [
+        "Names in this list are compared by equality; this helper does not measure hardware, bandwidth, encode cost, or receiver decode cost.",
+        "The original Dart method names, source text and complete exception table were not recovered.",
+        "The pseudocode describes observed instruction semantics; it is not original source or a runtime trace."
+      ]
+    },
+    {
+      "id": "BD-DART-CODEC-03",
+      "evidence_kind": "observed-instructions",
+      "claim": "The computed list is consumed by an SDP transform at 0x53fdb4 on both Offer and Answer flows; codec choices are not merely UI text.",
+      "spans": [
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x7c9e77",
+          "end_exclusive": "0x7c9e84",
+          "size": 13,
+          "sha256": "6b88fd0fcfc5d3d1482838f78c9fdd09eea75617f10298aa34c7bb45ec6f6764"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x7c9f9f",
+          "end_exclusive": "0x7c9fb0",
+          "size": 17,
+          "sha256": "6ad9b0bda11371957ee92673a4cb9e5a632a1d4f6abceca2ffc7fe505a3dba3d"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x7ca17a",
+          "end_exclusive": "0x7ca19f",
+          "size": 37,
+          "sha256": "2b1cd24b9d07a52ea0b2fb6dbc7bb1ed8078acb38b14fe00f8b5baf085cf47c0"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x7c28c8",
+          "end_exclusive": "0x7c28d5",
+          "size": 13,
+          "sha256": "e59083f14be1ac03f7efab867d89da015779cbfcc2bc37e6e550eb61a6d033b4"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x7c2c1a",
+          "end_exclusive": "0x7c2c34",
+          "size": 26,
+          "sha256": "ea3980ae42568e27717681de88d24783837fd46c58a87a6b1b6b8f74d06c5d19"
+        }
+      ],
+      "offer_chain": [
+        "0x7c9b28 reads videoCodecs/videoCodecsSort",
+        "0x7c9e7f calls 0x7c46f0",
+        "0x7c9fab calls 0x7ca054",
+        "0x7ca18f transforms created Offer SDP using 0x53fdb4"
+      ],
+      "answer_chain": [
+        "0x7c24cc reads videoCodecs/videoCodecsSort",
+        "0x7c28d0 calls 0x7c46f0",
+        "0x7c2ac9 calls 0x7c2b68 with the computed list",
+        "0x7c2c24 transforms Answer SDP using 0x53fdb4"
+      ]
+    },
+    {
+      "id": "BD-DART-CODEC-04",
+      "evidence_kind": "observed-instructions-and-derived-semantics",
+      "claim": "The SDP routine parses video media, RTP payload-to-codec mappings and RTX apt relationships, builds the selected primary payload order, includes related RTX payloads with duplicate checks, rewrites the video m-line, and filters codec-associated lines using the selected payload set.",
+      "spans": [
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x53fdd7",
+          "end_exclusive": "0x53fdef",
+          "size": 24,
+          "sha256": "9a96d73a82cb2d6c9f57814137d8626a28e854e7a16c8c57e8fbd2b25129f79c"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x53fea4",
+          "end_exclusive": "0x53febe",
+          "size": 26,
+          "sha256": "41d00c3b7d3ef0322c11863fb49155bae77a8abcf2b5232295d6dc7bd86678c2"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x540257",
+          "end_exclusive": "0x5402bd",
+          "size": 102,
+          "sha256": "6a6951b344378e8b64ff1a7e605fb84e5b794df983944644ad845ca9d8759a9b"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x54048d",
+          "end_exclusive": "0x5404df",
+          "size": 82,
+          "sha256": "32670955f04087edada2bcb47d1cb612dc827d6986dc13821832a965a99d85f7"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x54086d",
+          "end_exclusive": "0x54097f",
+          "size": 274,
+          "sha256": "f05fd9eace85089cf6b3342f0e2d5bc5acb3668f68b3c1bd7cc0ac5dd61f4177"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x54098f",
+          "end_exclusive": "0x540c89",
+          "size": 762,
+          "sha256": "6374b9776b7baea630e32f3bd0c6f2bdbf3d5f72083ffe1fbd424bc33abea3d9"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x540cb3",
+          "end_exclusive": "0x541068",
+          "size": 949,
+          "sha256": "c912347e737daf3f41aa7b4dfba7faee79f78fa36a847af396b4e4316894899c"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x541068",
+          "end_exclusive": "0x54111f",
+          "size": 183,
+          "sha256": "effcd6613494e0f9b441a9545a29b32239c244c81139523de21561b87cfb2ddf"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x5411ea",
+          "end_exclusive": "0x5412ce",
+          "size": 228,
+          "sha256": "89fa1a0ad9fcd0e77ce3914a12d5635909700f518237da82d207f8aa954212bb"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x541441",
+          "end_exclusive": "0x5414ac",
+          "size": 107,
+          "sha256": "6aee55b17ab203b8718a45ff893c17f1c370f79ac1efa2a03ceab46c5a3ca9e0"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x54168a",
+          "end_exclusive": "0x5416f5",
+          "size": 107,
+          "sha256": "253dd7e11c5d3457bef6d65557f6a5611593d48efa776f12fc3039edb2d720a0"
+        }
+      ],
+      "semantic_detail": [
+        "The outer selection loop uses the requested codec list and scans existing payloads, so it can retain multiple PT variants of one codec name.",
+        "0x540b52 compares the normalized payload codec name with rtx and excludes it from primary matching.",
+        "0x54086d explicitly handles apt= while parsing fmtp; the following selection phase relates repair payloads to their primary payload.",
+        "Related RTX PTs are added in the primary-payload iteration; contains/set operations avoid duplicate PT insertion.",
+        "RTP map, fmtp and RTCP feedback lines are subsequently selected by payload identity."
+      ],
+      "limits": [
+        "This is instruction-level semantic reconstruction, not exhaustive execution testing of the SDP algorithm.",
+        "All malformed SDP, wildcard feedback, RED/FEC, codec profile and RTX edge cases remain unverified. Do not copy the binary algorithm as a proven generic SDP parser."
+      ]
+    },
+    {
+      "id": "BD-DART-CODEC-05",
+      "evidence_kind": "observed-instructions-and-derived-semantics",
+      "claim": "For a retained fmtp payload the output appends the existing whole input line; the inspected codec-selection routine does not synthesize one forced H264 profile. If no primary payload is selected it branches to append the original media block.",
+      "spans": [
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x5415a8",
+          "end_exclusive": "0x54165d",
+          "size": 181,
+          "sha256": "733a87646ac19c56f111248cc888270101875db50e421568e53b48a76babf943"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x540c89",
+          "end_exclusive": "0x540cb3",
+          "size": 42,
+          "sha256": "e6edca87be385f3f5945762f2cc7932470890b2ec38f42b5b27e4d1c50ce9c14"
+        }
+      ],
+      "profile_limit": "Retaining input fmtp lines is not proof of negotiated profile compatibility or of no rewriting in every other native/Dart path.",
+      "no_match_limit": "Preservation of the original media block is inferred from the list append path and its arguments; no live empty-intersection test was run."
+    },
+    {
+      "id": "BD-DART-CODEC-06",
+      "evidence_kind": "observed-instructions",
+      "claim": "On this start-remote serialization path, videoCodecs and videoCodecsSort are separate keys but receive the same already-computed source value.",
+      "spans": [
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x7f0f07",
+          "end_exclusive": "0x7f0f83",
+          "size": 124,
+          "sha256": "27ed5a0f006fc81315c3ae0bc83ce60f154f7c29b3bfe488da6f65d2533896d6"
+        }
+      ],
+      "source_register_slot": "Both values load [rbp-0x118], at 0x7f0f18 and 0x7f0f56.",
+      "limit": "Does not prove the two fields always coincide, nor establish source-list construction or user default selection."
+    },
+    {
+      "id": "BD-DART-CODEC-07",
+      "evidence_kind": "observed-instructions",
+      "claim": "The recovered reqCodecInfo/resCodecInfo chain queries existing session implementation/performance information. It must not be presented as codec-capability exchange or an automatic codec-scoring algorithm.",
+      "spans": [
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x7cdc2d",
+          "end_exclusive": "0x7cdca4",
+          "size": 119,
+          "sha256": "0ee495834e841d588c1bd5482592d4c31eb1db5f6fd618849ff7cd9903ff2500"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x7d29b5",
+          "end_exclusive": "0x7d2a2f",
+          "size": 122,
+          "sha256": "2b513d046b27df0f512d36d25f67d2fb7780a11f6210ed38b00e76b435914fbc"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x7d2add",
+          "end_exclusive": "0x7d2c31",
+          "size": 340,
+          "sha256": "9626f676e2769f515976ffc70e0ad2829555b899db8b9eea48d5acf055d5bc72"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x7d2484",
+          "end_exclusive": "0x7d24f1",
+          "size": 109,
+          "sha256": "a16c42718609fc5ec235466fa8d139ef0add519c449e38b870fafa3cf9e02e82"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x7afa8b",
+          "end_exclusive": "0x7afc77",
+          "size": 492,
+          "sha256": "da49bbea6d44cdd35b75a1c679f82edc3cdf52697ca2118a702ab86537ca0c6e"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x7cdcea",
+          "end_exclusive": "0x7cdd16",
+          "size": 44,
+          "sha256": "37ec9e82a931f0241ed065c11100375e5d48077c9016ab5de9ea694748d8068c"
+        }
+      ],
+      "recovered_chain": [
+        "0x7cdc00 calls 0x7d2988 and awaits its response.",
+        "0x7d2988 emits reqCodecInfo and reads response data.encoderImplementation and avgEncodeTimeMs (plus additional fields).",
+        "0x7cdc00 next calls 0x7d2438, which submits MethodChannel getStats with peerConnectionId and trackId.",
+        "The message-dispatch reqCodecInfo branch replies as resCodecInfo from an existing session field.",
+        "Results are published in updateCodecInfo messages."
+      ],
+      "limit": "No direct call from these sampled statistics to the recovered codec-list ordering helper was established."
+    },
+    {
+      "id": "BD-DART-CODEC-08",
+      "evidence_kind": "observed-instructions",
+      "claim": "A focused initialization routine reads stored codecs, maps option records by name for comparison, reconciles them with an in-memory option list, persists on mismatch/error, and emits updateCodecs with that list.",
+      "spans": [
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x82cb7c",
+          "end_exclusive": "0x82cdd2",
+          "size": 598,
+          "sha256": "ce5e59e0bada5b9df14eb9733c7ae655eb039a83c0376c3a72828b55231fd085"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x82ce55",
+          "end_exclusive": "0x82ce8c",
+          "size": 55,
+          "sha256": "ea03258bd3cb8061eaec0e200f6350f85fad2e58cb1ca9e84621fc6b8e9080e9"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x58b970",
+          "end_exclusive": "0x58b9e0",
+          "size": 112,
+          "sha256": "8a7e194fe5701a00d498e163735368475600df00ca4f6ea9055d79498d4658a4"
+        },
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x58b900",
+          "end_exclusive": "0x58b970",
+          "size": 112,
+          "sha256": "e64f19b55e1a6384d71faa419fd4f79b3339b52d9813a92f6598a9741b69fcad"
+        }
+      ],
+      "limit": "The full option object schema, enabled-bit defaults, all storage precedence and UI event paths were not recovered. This evidence does not establish factory defaults."
+    },
+    {
+      "id": "BD-DART-CODEC-09",
+      "evidence_kind": "observed-instructions",
+      "claim": "The default RTC config endpoint is passed into the HTTP/helper path, so remote configuration is an actual code path rather than a dead string.",
+      "spans": [
+        {
+          "file": "D:\\BilldDesk\\data\\app.so",
+          "start": "0x7dbd34",
+          "end_exclusive": "0x7dbd8c",
+          "size": 88,
+          "sha256": "87b938d722e5a72666d6bb4b2252058206ae7fa711450d0492d953f9a4422f8a"
+        }
+      ],
+      "limit": "No request was executed. Returned field values, codec applicability, precedence over persisted options and factory defaults remain unknown."
+    }
+  ],
+  "literal_pool_references": [
+    {
+      "text": "updateDefaultRtcConfig",
+      "ref_id": 13807,
+      "object_file_offset": "0x23ad50",
+      "payload_file_offset": "0x23ad60",
+      "pool_index": 4694,
+      "pp_displacement": "0x92bf",
+      "pool_serialized_entry": "0xd929a"
+    },
+    {
+      "text": "updateCodecs",
+      "ref_id": 9549,
+      "object_file_offset": "0x20e0a0",
+      "payload_file_offset": "0x20e0b0",
+      "pool_index": 5005,
+      "pp_displacement": "0x9c77",
+      "pool_serialized_entry": "0xd95b3"
+    },
+    {
+      "text": "updateCodecInfo",
+      "ref_id": 19987,
+      "object_file_offset": "0x273f80",
+      "payload_file_offset": "0x273f90",
+      "pool_index": 5022,
+      "pp_displacement": "0x9cff",
+      "pool_serialized_entry": "0xd95dd"
+    },
+    {
+      "text": "getCodecs",
+      "ref_id": 4627,
+      "object_file_offset": "0x1e0b50",
+      "payload_file_offset": "0x1e0b60",
+      "pool_index": 6556,
+      "pp_displacement": "0xccef",
+      "pool_serialized_entry": "0xda911"
+    },
+    {
+      "text": "H265",
+      "ref_id": 7077,
+      "object_file_offset": "0x1f7290",
+      "payload_file_offset": "0x1f72a0",
+      "pool_index": 7412,
+      "pp_displacement": "0xe7af",
+      "pool_serialized_entry": "0xdb2ce"
+    },
+    {
+      "text": "H264",
+      "ref_id": 12751,
+      "object_file_offset": "0x22e260",
+      "payload_file_offset": "0x22e270",
+      "pool_index": 7413,
+      "pp_displacement": "0xe7b7",
+      "pool_serialized_entry": "0xdb2d1"
+    },
+    {
+      "text": "AV1",
+      "ref_id": 5564,
+      "object_file_offset": "0x1e9470",
+      "payload_file_offset": "0x1e9480",
+      "pool_index": 7414,
+      "pp_displacement": "0xe7bf",
+      "pool_serialized_entry": "0xdb2d4"
+    },
+    {
+      "text": "VP9",
+      "ref_id": 5543,
+      "object_file_offset": "0x1e8ff0",
+      "payload_file_offset": "0x1e9000",
+      "pool_index": 7415,
+      "pp_displacement": "0xe7c7",
+      "pool_serialized_entry": "0xdb2d7"
+    },
+    {
+      "text": "VP8",
+      "ref_id": 13023,
+      "object_file_offset": "0x230970",
+      "payload_file_offset": "0x230980",
+      "pool_index": 7416,
+      "pp_displacement": "0xe7cf",
+      "pool_serialized_entry": "0xdb2da"
+    },
+    {
+      "text": "defaultRtcConfig",
+      "ref_id": 14385,
+      "object_file_offset": "0x240060",
+      "payload_file_offset": "0x240070",
+      "pool_index": 11857,
+      "pp_displacement": "0x17297",
+      "pool_serialized_entry": "0xdee6a"
+    },
+    {
+      "text": "reqCodecInfo",
+      "ref_id": 10100,
+      "object_file_offset": "0x213280",
+      "payload_file_offset": "0x213290",
+      "pool_index": 12284,
+      "pp_displacement": "0x17fef",
+      "pool_serialized_entry": "0xdf355"
+    },
+    {
+      "text": "resCodecInfo",
+      "ref_id": 4038,
+      "object_file_offset": "0x1db860",
+      "payload_file_offset": "0x1db870",
+      "pool_index": 12285,
+      "pp_displacement": "0x17ff7",
+      "pool_serialized_entry": "0xdf358"
+    },
+    {
+      "text": "videoCodecs",
+      "ref_id": 20532,
+      "object_file_offset": "0x279010",
+      "payload_file_offset": "0x279020",
+      "pool_index": 26413,
+      "pp_displacement": "0x33977",
+      "pool_serialized_entry": "0xea268"
+    },
+    {
+      "text": "videoCodecsSort",
+      "ref_id": 15417,
+      "object_file_offset": "0x249f70",
+      "payload_file_offset": "0x249f80",
+      "pool_index": 26416,
+      "pp_displacement": "0x3398f",
+      "pool_serialized_entry": "0xea270"
+    },
+    {
+      "text": "/desk_config/default_rtc_config",
+      "ref_id": 16037,
+      "object_file_offset": "0x24f940",
+      "payload_file_offset": "0x24f950",
+      "pool_index": 29148,
+      "pp_displacement": "0x38eef",
+      "pool_serialized_entry": "0xec3da"
+    }
+  ],
+  "interpretation": {
+    "established": "Configurable multi-codec enabled list and ordered-list intersection feeds SDP payload selection/reordering on Offer and Answer. A fixed H264-only interpretation is contradicted by executable code.",
+    "not_established": "An automatic device-performance score, a global runtime codec ranking, factory defaults, and automatic codec-switch/recovery triggers were not recovered.",
+    "distinction": "Configured order and negotiated result are different. Native/software encoder fallback within one codec is a separate mechanism."
+  },
+  "parent_reported_ui_observation": {
+    "source": "Parent agent Computer Use report, not independently repeated here",
+    "current_selected": [
+      "H265",
+      "H264",
+      "AV1",
+      "VP9",
+      "VP8",
+      "opus",
+      "G722",
+      "PCMU",
+      "PCMA",
+      "CN"
+    ],
+    "all_five_video_checked": true,
+    "visible_sort_or_scoring_control_observed": false,
+    "default_status": "Current persisted configuration; factory default unknown"
+  },
+  "minimal_runtime_observations": [
+    "In an authorized actual Billd-to-Mac session, record both endpoints' current enabled codec lists and the final negotiated codec. Preserve the original settings before any reversible change.",
+    "Observe effective videoCodecs/videoCodecsSort and the video m-line/PT order in Offer and Answer, using a supported local diagnostic/debug observation point; do not infer them solely from checkbox order. Retain only relevant codec/fmtp/RTX fields and redact unrelated credentials/network identifiers.",
+    "Collect actual getStats codecId -> mimeType/sdpFmtpLine plus encoderImplementation, avgEncodeTimeMs, resolution/FPS, bitrate and decode cost. reqCodecInfo is useful for this existing-session observation, not proof of capability scoring.",
+    "For one controlled second session, disable only the currently chosen codec while keeping multiple alternatives enabled, then verify the next negotiated common format and associated RTX/fmtp. Restore the original settings afterward.",
+    "To determine performance-driven switching, retain one session under a controlled load change and observe whether a fresh Offer/Answer and codecId change occur, or only bitrate/FPS/resolution adaptation. No such switching is established by the static path."
+  ],
+  "artifacts": [
+    {
+      "path": ".tools/rea-billd-package/dart-investigation/parse_codec_snapshot.py",
+      "size": 11282,
+      "sha256": "cc0de149be2a8e0bd1ac2823d1e0e1e9fb093fc0fe2c4130c512d84e2d660796"
+    },
+    {
+      "path": ".tools/rea-billd-package/dart-investigation/codec_disasm.py",
+      "size": 2871,
+      "sha256": "e188d4b5f8dd504b17b5de368a22fb6b21e872bd71c181d35649cc06bc8d9364"
+    },
+    {
+      "path": ".tools/rea-billd-package/dart-investigation/snapshot-allocation-map.json",
+      "size": 3607896,
+      "sha256": "b90f475b03b4b88a08c22f4c01e36d624b706c55ef9c648f75166e07d266e55b"
+    },
+    {
+      "path": ".tools/rea-billd-package/dart-investigation/vm-snapshot-allocation-map.json",
+      "size": 94326,
+      "sha256": "1a2bfcff267c0e9894938bfb16daf247fd61465f2e6450a68e765721557f7a41"
+    },
+    {
+      "path": ".tools/rea-billd-package/dart-investigation/snapshot-global-pool.json",
+      "size": 4786884,
+      "sha256": "95b1e9ac1a6a8ae1ace7bed32e4b42d8871a1b3678df2e302df9b40725c68d1e"
+    },
+    {
+      "path": ".tools/rea-billd-package/dart-investigation/snapshot-early-fills.json",
+      "size": 4746728,
+      "sha256": "8c0980fe324ef77ee7693d4a6c911cecdc9ec7111cc6d84211ea77520f804b2e"
+    },
+    {
+      "path": ".tools/rea-billd-package/dart-investigation/codec-aot-pool-xrefs.json",
+      "size": 6648,
+      "sha256": "48b64f700c02438ed224545d86d5c3271a8ad2de5bf9730f6e109e18623ac7a5"
+    },
+    {
+      "path": ".tools/rea-billd-package/dart-investigation/config-and-codec-xrefs.json",
+      "size": 1989,
+      "sha256": "813d0d73410e21c47b28856f8350a12f3c7953f07b90543134e1c4949de2831e"
+    },
+    {
+      "path": ".tools/rea-billd-package/dart-investigation/aot-0x7c46f0.asm",
+      "size": 4187,
+      "sha256": "9fdcb0c9ffc1204eadd4f1fbb25fd508b06da56df3d241adbc49003bd14f2db2"
+    },
+    {
+      "path": ".tools/rea-billd-package/dart-investigation/aot-0x541e6c.asm",
+      "size": 1465,
+      "sha256": "8135075ea8f979cb44c4e8d26325879c9d3413f9ebd268f1f35b048232fa9238"
+    },
+    {
+      "path": ".tools/rea-billd-package/dart-investigation/aot-0x541f00.asm",
+      "size": 643,
+      "sha256": "58ada75fc36b4c8487c4a2657bb6684486db7f04c8adddabaf6cf8d2d6f09e93"
+    },
+    {
+      "path": ".tools/rea-billd-package/dart-investigation/aot-0x434df8.asm",
+      "size": 3229,
+      "sha256": "7e8718b7570a1be35d792cabd455362383ea89463f4b72bd530142d4d1f92aa7"
+    },
+    {
+      "path": ".tools/rea-billd-package/dart-investigation/aot-0x53fdb4.asm",
+      "size": 73168,
+      "sha256": "6f58b7861a88ac4284a73406622a187559954610270efa3cfd36867c559048f9"
+    },
+    {
+      "path": ".tools/rea-billd-package/dart-investigation/aot-0x7c24cc.asm",
+      "size": 15955,
+      "sha256": "2c176f4e68f40116bda833c33372641616d7bcb2b6fdde8e27eed56679e6b9be"
+    },
+    {
+      "path": ".tools/rea-billd-package/dart-investigation/aot-0x7c9b28.asm",
+      "size": 12383,
+      "sha256": "4eed95f516621aad83ec4d41052dee61df54bd098ea8c4a17b57a7f92cdb5f7f"
+    },
+    {
+      "path": ".tools/rea-billd-package/dart-investigation/aot-0x7c2b68.asm",
+      "size": 6895,
+      "sha256": "eea366429bef434ac737586d7d150fe034ecf8a03f4da4d3527093a9cb73d135"
+    },
+    {
+      "path": ".tools/rea-billd-package/dart-investigation/aot-0x7ca054.asm",
+      "size": 7529,
+      "sha256": "8fce30f5e002f2edd94e43d71f6afedfb053139a260557e2c000b2df526ead7d"
+    },
+    {
+      "path": ".tools/rea-billd-package/dart-investigation/aot-0x7cdc00.asm",
+      "size": 5563,
+      "sha256": "b167b4e1ccbebad3d71e4798484f62abcc3862865525ea52f60da0471076b13d"
+    },
+    {
+      "path": ".tools/rea-billd-package/dart-investigation/aot-0x7d2988.asm",
+      "size": 11601,
+      "sha256": "676dda4daba3b201a1748c4400e52d160100592aa7113600c57b6bc947094749"
+    },
+    {
+      "path": ".tools/rea-billd-package/dart-investigation/aot-0x7d2438.asm",
+      "size": 11472,
+      "sha256": "cfc08ec643fa671afac8f5fbc7f4fb13451c95136805c71fb3ac94f29a72ca31"
+    },
+    {
+      "path": ".tools/rea-billd-package/dart-investigation/aot-0x82cb4c.asm",
+      "size": 7511,
+      "sha256": "7879c79a2677b5086379325a8f36db324bed9397c22fab7c2a704cd8e67fe8aa"
+    },
+    {
+      "path": ".tools/rea-billd-package/dart-investigation/aot-0x7dbd34.asm",
+      "size": 887,
+      "sha256": "93018e30f721322c81bbcd604f1d49659baf4f76c82e4533dc706194a0ae01b1"
+    }
+  ],
+  "reproduction_commands": [
+    "python -X utf8 .tools/rea-billd-package/dart-investigation/parse_codec_snapshot.py vm",
+    "python -X utf8 .tools/rea-billd-package/dart-investigation/parse_codec_snapshot.py",
+    "python -X utf8 .tools/rea-billd-package/dart-investigation/parse_codec_snapshot.py pool",
+    "python -X utf8 .tools/rea-billd-package/dart-investigation/parse_codec_snapshot.py fills",
+    "python -X utf8 .tools/rea-billd-package/dart-investigation/build_codec_selection_evidence.py"
+  ],
+  "boundaries": [
+    "No installation engine was added; official source reference files were fetched only for format verification.",
+    "No target binary or product source was modified; no target configuration, private session logs, or remote API response was read.",
+    "Evidence IDs BD-DART-CODEC-* are local supplemental ledger identifiers, not REA-issued Evidence IDs.",
+    "Some source functions have stripped/discarded owners; ranges come from the embedded instructions table, not guessed symbol names.",
+    "Assembly semantic interpretations remain explicit where dynamic calls or incomplete metadata prevent full proof."
+  ]
+}

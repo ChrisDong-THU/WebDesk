@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:file_selector/file_selector.dart';
+import 'package:cross_file/cross_file.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:webdesk/tools/tool_channel.dart';
@@ -243,15 +243,50 @@ void main() {
   );
 
   test(
+    'picker cancellation and errors reply promptly and allow the next selection',
+    () async {
+      await tools.close();
+      channel = Channel();
+      var attempts = 0;
+      tools = await ToolChannel.create(
+        Peer(channel),
+        selectFile: () async {
+          attempts++;
+          if (attempts == 1) return null;
+          if (attempts == 2) throw StateError('picker failed');
+          return XFile(selected.path);
+        },
+      );
+      await selected.writeAsBytes([1, 2, 3]);
+      final cancelled = await channel.request('file.select');
+      expect(cancelled.containsKey('reply'), isTrue);
+      expect(cancelled['reply'], isNull);
+      expect(cancelled['error'], isNull);
+      expect(
+        (await channel.request('file.select'))['error'],
+        contains('picker failed'),
+      );
+      final next = (await channel.request('file.select'))['reply'] as Map;
+      expect(next['size'], 3);
+      expect(next.containsKey('path'), isFalse);
+      expect((await channel.request('ping'))['reply'], {'version': 2});
+    },
+  );
+
+  test(
     'closing while a file picker is open does not wait for user interaction',
     () async {
       await tools.close();
       final picker = Completer<XFile?>();
+      var cancellations = 0;
       channel = Channel();
       tools = await ToolChannel.create(
         Peer(channel),
         downloadsDirectory: () async => root,
         selectFile: () => picker.future,
+        cancelFileSelection: () async {
+          cancellations++;
+        },
       );
       channel.onMessage!(
         RTCDataChannelMessage(
@@ -260,6 +295,8 @@ void main() {
       );
       await Future<void>.delayed(Duration.zero);
       await tools.close().timeout(const Duration(seconds: 5));
+      await tools.close();
+      expect(cancellations, 1);
       picker.complete(XFile(selected.path));
       await Future<void>.delayed(Duration.zero);
       expect(channel.closed, isTrue);

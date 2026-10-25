@@ -21,12 +21,19 @@ export class HostCapture {
   constructor(private options: CaptureOptions) {}
   private async open(source: string) {
     if (!source) throw Error('Screen source unavailable');
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: {
-      mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: source },
-    } as MediaTrackConstraints });
-    if (this.stopped) { stream.getTracks().forEach(track => track.stop()); throw Error('Capture cancelled'); }
-    const previous = this.normal; this.normal = stream;
-    previous?.getTracks().forEach(track => track.stop());
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: source },
+      } as MediaTrackConstraints,
+    });
+    if (this.stopped) {
+      stream.getTracks().forEach((track) => track.stop());
+      throw Error('Capture cancelled');
+    }
+    const previous = this.normal;
+    this.normal = stream;
+    previous?.getTracks().forEach((track) => track.stop());
     return stream;
   }
   private async show(stream: MediaStream) {
@@ -48,18 +55,25 @@ export class HostCapture {
       canvas.getContext('2d', { alpha: false })!.drawImage(bitmap, 0, 0);
       if (!this.fallback) this.fallback = canvas.captureStream(30);
       await this.show(this.fallback);
-    } finally { bitmap.close(); }
+    } finally {
+      bitmap.close();
+    }
   }
   async start(source: string) {
     const state = await this.options.state();
     if (this.stopped) return;
     if (!state.secure) {
-      try { await this.show(await this.open(source)); }
-      catch { if (!this.stopped) await this.nativeFrame(); }
+      try {
+        await this.show(await this.open(source));
+      } catch {
+        if (!this.stopped) await this.nativeFrame();
+      }
     } else await this.nativeFrame();
     this.schedule(100);
   }
-  private schedule(delay: number) { if (!this.stopped) this.timer = setTimeout(() => void this.tick(), delay); }
+  private schedule(delay: number) {
+    if (!this.stopped) this.timer = setTimeout(() => void this.tick(), delay);
+  }
   private async tick() {
     let delay = 250;
     try {
@@ -70,8 +84,11 @@ export class HostCapture {
       else {
         if (!state.secure && Date.now() >= this.retryAt) {
           this.retryAt = Date.now() + 2000;
-          try { await this.show(await this.open(await this.options.source())); }
-          catch { /* Protected desktop transitions can temporarily deny capture. */ }
+          try {
+            await this.show(await this.open(await this.options.source()));
+          } catch {
+            /* Protected desktop transitions can temporarily deny capture. */
+          }
         }
         const replacement = this.normal?.getVideoTracks()[0];
         if (state.secure || !replacement || replacement.readyState !== 'live' || replacement.muted) {
@@ -82,14 +99,21 @@ export class HostCapture {
       this.failedSince = 0;
     } catch (error) {
       if (!this.failedSince) this.failedSince = Date.now();
-      if (!this.stopped && Date.now() - this.failedSince > 30000) { this.stop(); this.options.onError?.(error); return; }
+      if (!this.stopped && Date.now() - this.failedSince > 30000) {
+        this.stop();
+        this.options.onError?.(error);
+        return;
+      }
       delay = 500;
-    } finally { this.schedule(delay); }
+    } finally {
+      this.schedule(delay);
+    }
   }
   stop() {
-    this.stopped = true; clearTimeout(this.timer);
-    this.normal?.getTracks().forEach(track => track.stop());
-    this.fallback?.getTracks().forEach(track => track.stop());
+    this.stopped = true;
+    clearTimeout(this.timer);
+    this.normal?.getTracks().forEach((track) => track.stop());
+    this.fallback?.getTracks().forEach((track) => track.stop());
     this.canvas = undefined;
   }
 }

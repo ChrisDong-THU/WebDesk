@@ -8,22 +8,57 @@ import path from 'node:path';
 import { DEFAULT_QUALITY, RESOLUTION_OPTIONS, validQuality } from '../shared/protocol.mjs';
 
 test('retained upstream code has no unrecorded modifications', () => {
-  assert.match(execFileSync(process.execPath, ['scripts/extract-billd.mjs', '--check'], { encoding: 'utf8' }), /Verified 56 upstream blocks/);
+  assert.match(
+    execFileSync(process.execPath, ['scripts/extract-billd.mjs', '--check'], { encoding: 'utf8' }),
+    /Verified 56 upstream blocks/,
+  );
 });
 test('upstream server signaling blocks remain reproducible', () => {
-  assert.match(execFileSync(process.execPath, ['scripts/extract-billd-server.mjs', '--check'], { encoding: 'utf8' }), /Verified 5 upstream server blocks/);
+  assert.match(
+    execFileSync(process.execPath, ['scripts/extract-billd-server.mjs', '--check'], { encoding: 'utf8' }),
+    /Verified 5 upstream server blocks/,
+  );
 });
 
 test('six requested quality presets remain compatible with the deployed signaling service', () => {
   assert.equal(DEFAULT_QUALITY.resolutionRatio, 4320);
   assert.equal(DEFAULT_QUALITY.maxBitrate, 0);
-  assert.deepEqual(RESOLUTION_OPTIONS.map(item => item.value), [360, 720, 1080, 1440, 2160, 4320]);
-  for (const option of RESOLUTION_OPTIONS) assert.ok(validQuality({ ...DEFAULT_QUALITY, resolutionRatio: option.value }));
+  assert.deepEqual(
+    RESOLUTION_OPTIONS.map((item) => item.value),
+    [360, 720, 1080, 1440, 2160, 4320],
+  );
+  for (const option of RESOLUTION_OPTIONS)
+    assert.ok(validQuality({ ...DEFAULT_QUALITY, resolutionRatio: option.value }));
   assert.equal(validQuality({ ...DEFAULT_QUALITY, resolutionRatio: '4320' }), false);
 });
 
-test('generated control transport preserves reliable ordering for press, release and settings', async t => {
-  await build({ entryPoints: ['src/billd/webRTC.ts'], outfile: 'test-results/control-transport.mjs', bundle: true, platform: 'node', format: 'esm' });
+test('media settings require the current contract and validate degradation and latency modes', () => {
+  assert.equal(
+    validQuality({ maxBitrate: 0, maxFramerate: 60, resolutionRatio: 1080, videoContentHint: 'detail' }),
+    false,
+  );
+  for (const degradationPreference of [
+    'auto',
+    'balanced',
+    'maintain-framerate',
+    'maintain-resolution',
+    'disabled',
+  ]) {
+    for (const networkMode of ['auto', 'low-latency'])
+      assert.ok(validQuality({ ...DEFAULT_QUALITY, degradationPreference, networkMode }));
+  }
+  assert.equal(validQuality({ ...DEFAULT_QUALITY, degradationPreference: 'invalid' }), false);
+  assert.equal(validQuality({ ...DEFAULT_QUALITY, networkMode: 1 }), false);
+});
+
+test('generated control transport preserves reliable ordering for press, release and settings', async (t) => {
+  await build({
+    entryPoints: ['src/billd/webRTC.ts'],
+    outfile: 'test-results/control-transport.mjs',
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+  });
   const { createWebRTCClass } = await import('../test-results/control-transport.mjs');
   const sent = [];
   class Peer {
@@ -33,52 +68,105 @@ test('generated control transport preserves reliable ordering for press, release
       assert.equal(options.ordered, true);
       assert.equal(options.maxRetransmits, undefined);
       assert.equal(options.maxPacketLifeTime, undefined);
-      return { readyState: 'open', send: value => sent.push(JSON.parse(value)), close() {} };
+      return { readyState: 'open', send: (value) => sent.push(JSON.parse(value)), close() {} };
     }
     close() {}
   }
-  const oldWindow = globalThis.window, oldPeer = globalThis.RTCPeerConnection;
+  const oldWindow = globalThis.window,
+    oldPeer = globalThis.RTCPeerConnection;
   globalThis.window = { RTCPeerConnection: Peer };
   globalThis.RTCPeerConnection = Peer;
-  t.after(() => { globalThis.window = oldWindow; globalThis.RTCPeerConnection = oldPeer; });
-  const RTC = createWebRTCClass({
-    iceServers: [], appStore: { remoteDesk: new Map() }, networkStore: { rtcMap: new Map() },
+  t.after(() => {
+    globalThis.window = oldWindow;
+    globalThis.RTCPeerConnection = oldPeer;
   });
-  const rtc = new RTC({ roomId: 'test', sender: 'controller', receiver: 'host', isSRS: false, videoEl: { remove() {} } });
+  const RTC = createWebRTCClass({
+    iceServers: [],
+    appStore: { remoteDesk: new Map() },
+    networkStore: { rtcMap: new Map() },
+  });
+  const rtc = new RTC({
+    roomId: 'test',
+    sender: 'controller',
+    receiver: 'host',
+    isSRS: false,
+    videoEl: { remove() {} },
+  });
   t.after(() => rtc.close());
   for (const message of [
     { msgType: 'billdDeskBehavior', data: { type: 15, key: [71] } },
     { msgType: 'billdDeskBehavior', data: { type: 16, key: [71] } },
     { msgType: 'changeMaxFramerate', data: { val: 30 } },
     { msgType: 'billdDeskBehavior', data: { type: 17 } },
-  ]) rtc.dataChannelSend(message);
-  assert.deepEqual(sent.map(value => value.data), [{ type: 15, key: [71] }, { type: 16, key: [71] }, { val: 30 }, { type: 17 }]);
+  ])
+    rtc.dataChannelSend(message);
+  assert.deepEqual(
+    sent.map((value) => value.data),
+    [{ type: 15, key: [71] }, { type: 16, key: [71] }, { val: 30 }, { type: 17 }],
+  );
 });
 
 test('upstream IPC handlers execute original native operations without OS input', async () => {
   await mkdir('test-results/native', { recursive: true });
-  await build({ entryPoints: ['electron-main/billd/handlers.ts'], outfile: 'test-results/native/handlers.cjs', bundle: true, platform: 'node', format: 'cjs' });
+  await build({
+    entryPoints: ['electron-main/billd/handlers.ts'],
+    outfile: 'test-results/native/handlers.cjs',
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+  });
   const require = createRequire(import.meta.url);
   const { registerNativeHandlers } = require(path.resolve('test-results/native/handlers.cjs'));
-  const handlers = new Map(), calls = [], responses = [];
-  const method = name => async (...args) => { calls.push({ name, args }); };
-  registerNativeHandlers({ ipcMain: { on: (name, fn) => handlers.set(name, fn), handle: (name, fn) => handlers.set(name, fn) },
-    windowMap: new Map([[1, {}]]), winWebContentsSend: value => responses.push(value),
-    nutjs: { mouse: Object.fromEntries(['move', 'drag', 'setPosition', 'pressButton', 'releaseButton', 'doubleClick', 'click', 'scrollDown', 'scrollUp', 'scrollLeft', 'scrollRight'].map(name => [name, method(name)])),
-      keyboard: { type: method('type'), pressKey: method('pressKey'), releaseKey: method('releaseKey') }, Button: { LEFT: 0, RIGHT: 1 } },
+  const handlers = new Map(),
+    calls = [],
+    responses = [];
+  const method =
+    (name) =>
+    async (...args) => {
+      calls.push({ name, args });
+    };
+  registerNativeHandlers({
+    ipcMain: { on: (name, fn) => handlers.set(name, fn), handle: (name, fn) => handlers.set(name, fn) },
+    windowMap: new Map([[1, {}]]),
+    winWebContentsSend: (value) => responses.push(value),
+    nutjs: {
+      mouse: Object.fromEntries(
+        [
+          'move',
+          'drag',
+          'setPosition',
+          'pressButton',
+          'releaseButton',
+          'doubleClick',
+          'click',
+          'scrollDown',
+          'scrollUp',
+          'scrollLeft',
+          'scrollRight',
+        ].map((name) => [name, method(name)]),
+      ),
+      keyboard: { type: method('type'), pressKey: method('pressKey'), releaseKey: method('releaseKey') },
+      Button: { LEFT: 0, RIGHT: 1 },
+    },
     desktopCapturer: { getSources: async () => [{ id: 'first-screen' }, { id: 'second-screen' }] },
-    screen: { getPrimaryDisplay: () => ({ size: { width: 1600, height: 1000 }, scaleFactor: 2 }) }, platform: 'win32',
+    screen: { getPrimaryDisplay: () => ({ size: { width: 1600, height: 1000 }, scaleFactor: 2 }) },
+    platform: 'win32',
   });
-  const invoke = async (name, data = {}) => handlers.get(name)(null, { requestId: name, data: { windowId: 1, ...data } });
+  const invoke = async (name, data = {}) =>
+    handlers.get(name)(null, { requestId: name, data: { windowId: 1, ...data } });
   await invoke('mouseMove', { x: 1600, y: 1000 });
   await invoke('mouseScrollDown', { amount: 120 });
   await invoke('keyboardPressKey', { key: [1, 2] });
   await invoke('keyboardReleaseKey', { key: [1, 2] });
-  await invoke('mousePressButtonLeft'); await invoke('mouseReleaseButtonLeft');
+  await invoke('mousePressButtonLeft');
+  await invoke('mouseReleaseButtonLeft');
   assert.deepEqual(calls, [
-    { name: 'move', args: [[{ x: 1600, y: 1000 }]] }, { name: 'scrollDown', args: [120] },
-    { name: 'pressKey', args: [1, 2] }, { name: 'releaseKey', args: [1, 2] },
-    { name: 'pressButton', args: [0] }, { name: 'releaseButton', args: [0] },
+    { name: 'move', args: [[{ x: 1600, y: 1000 }]] },
+    { name: 'scrollDown', args: [120] },
+    { name: 'pressKey', args: [1, 2] },
+    { name: 'releaseKey', args: [1, 2] },
+    { name: 'pressButton', args: [0] },
+    { name: 'releaseButton', args: [0] },
   ]);
   await invoke('getScreenStream');
   assert.equal(responses.at(-1).data.stream.id, 'first-screen');

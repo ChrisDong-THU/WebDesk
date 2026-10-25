@@ -1,0 +1,1355 @@
+{
+  "date": "2026-10-25",
+  "target": "D:\\BilldDesk",
+  "version": {
+    "FileVersion": "0.609.0+1",
+    "ProductVersion": "0.609.0+1",
+    "ProductName": "BilldDesk",
+    "CompanyName": "com.hsslive"
+  },
+  "evidence_type": "Static shipped-artifact inspection; no target execution or live performance measurements.",
+  "rea_version": "6.7.0",
+  "rea": [
+    {
+      "file": ".tools/rea-billd-package/libwebrtc-headers.json",
+      "evidence_id": "ev_df9826857fcdf71faba9e07be8e651957accd96a24edc3c06618e1dfbc6fb6a7",
+      "operation": "inspect_with_objdump",
+      "subject": {
+        "name": "libwebrtc.dll",
+        "digest": {
+          "sha256": "9d7933cc2eefe111502e7ef5aef23a07a943209590ffb781d3f494149d7392c1"
+        },
+        "local_path": "D:\\BilldDesk\\libwebrtc.dll",
+        "format": "unknown",
+        "architecture": null
+      },
+      "output_truncated": false
+    },
+    {
+      "file": ".tools/rea-billd-package/libwebrtc-sections.json",
+      "evidence_id": "ev_f116d1cd6c21c23a0427228500cc1aaaada4f276e5b130be99e2062158366db5",
+      "operation": "inspect_with_objdump",
+      "subject": {
+        "name": "libwebrtc.dll",
+        "digest": {
+          "sha256": "9d7933cc2eefe111502e7ef5aef23a07a943209590ffb781d3f494149d7392c1"
+        },
+        "local_path": "D:\\BilldDesk\\libwebrtc.dll",
+        "format": "unknown",
+        "architecture": null
+      },
+      "output_truncated": false
+    },
+    {
+      "file": ".tools/rea-billd-package/plugin-symbols.json",
+      "evidence_id": "ev_8f2a4cb11b8daf0e1b5b6be4fd18d9773e84763f98994878653e9720f24d9057",
+      "operation": "inspect_with_objdump",
+      "subject": {
+        "name": "flutter_webrtc_plugin.dll",
+        "digest": {
+          "sha256": "f1f0e5fe955913e6488646e90e190de41afccede3ab3e79dfcd1c1c05c9bfa3e"
+        },
+        "local_path": "D:\\BilldDesk\\flutter_webrtc_plugin.dll",
+        "format": "unknown",
+        "architecture": null
+      },
+      "output_truncated": false
+    },
+    {
+      "file": ".tools/rea-billd-package/plugin-disassembly.json",
+      "evidence_id": "ev_188087ff2ca1ae75600030e560c032ca21eb346c079ca8f94d7560c5e51c6948",
+      "operation": "inspect_with_objdump",
+      "subject": {
+        "name": "flutter_webrtc_plugin.dll",
+        "digest": {
+          "sha256": "f1f0e5fe955913e6488646e90e190de41afccede3ab3e79dfcd1c1c05c9bfa3e"
+        },
+        "local_path": "D:\\BilldDesk\\flutter_webrtc_plugin.dll",
+        "format": "unknown",
+        "architecture": null
+      },
+      "output_truncated": false
+    },
+    {
+      "file": ".tools/rea-billd-package/dart-sections.json",
+      "evidence_id": "ev_a4137af283ee14a843863a963ea21a3960e3a0795af9dc47e0d0748c0d665697",
+      "operation": "inspect_with_objdump",
+      "subject": {
+        "name": "app.so",
+        "digest": {
+          "sha256": "a33236647ebc61852fb517751d41dd3537d592b1b7c920e5f35de0327fe329fb"
+        },
+        "local_path": "D:\\BilldDesk\\data\\app.so",
+        "format": "unknown",
+        "architecture": null
+      },
+      "output_truncated": false
+    },
+    {
+      "file": ".tools/rea-billd-package/simulator-headers.json",
+      "evidence_id": "ev_dc78cb8254dbea098d31f1e31e146a4a6f91ffce970a6dedfaa014dfbfb474ae",
+      "operation": "inspect_with_objdump",
+      "subject": {
+        "name": "billd_simulator_plugin.dll",
+        "digest": {
+          "sha256": "76e2574bddb1cc89a42edf5b2eaeb463fa289bea5bfe753d0715059481c8dae3"
+        },
+        "local_path": "D:\\BilldDesk\\billd_simulator_plugin.dll",
+        "format": "unknown",
+        "architecture": null
+      },
+      "output_truncated": false
+    },
+    {
+      "file": ".tools/rea-billd-package/exe-resources.json",
+      "evidence_id": "ev_adb9d3d8b9862ea3a8d9eb41d9ca735e3023e14a5a14390f3f627b041c771a1f",
+      "operation": "inspect_pe_resources",
+      "subject": {
+        "name": "BilldDesk.exe",
+        "digest": {
+          "sha256": "fd729825f1afe6df69aa09e84b555a232a8b2ac64576632031c3e90b28660724"
+        },
+        "local_path": "D:\\BilldDesk\\BilldDesk.exe",
+        "format": "pe",
+        "architecture": "x86_64"
+      },
+      "output_truncated": null
+    }
+  ],
+  "dart_identity": {
+    "path": "D:\\BilldDesk\\data\\app.so",
+    "sha256": "a33236647ebc61852fb517751d41dd3537d592b1b7c920e5f35de0327fe329fb",
+    "size": 9012144,
+    "format": "ELF64 little-endian x86-64; Dart AOT for windows",
+    "sections": [
+      {
+        "index": 0,
+        "name": "",
+        "address": "0x0",
+        "offset": "0x0",
+        "size": 0
+      },
+      {
+        "index": 1,
+        "name": ".note.gnu.build-id",
+        "address": "0x1c8",
+        "offset": "0x1c8",
+        "size": 32
+      },
+      {
+        "index": 2,
+        "name": ".dynstr",
+        "address": "0x1e8",
+        "offset": "0x1e8",
+        "size": 133
+      },
+      {
+        "index": 3,
+        "name": ".dynsym",
+        "address": "0x270",
+        "offset": "0x270",
+        "size": 144
+      },
+      {
+        "index": 4,
+        "name": ".hash",
+        "address": "0x300",
+        "offset": "0x300",
+        "size": 56
+      },
+      {
+        "index": 5,
+        "name": ".rodata",
+        "address": "0x340",
+        "offset": "0x340",
+        "size": 2716288
+      },
+      {
+        "index": 6,
+        "name": ".eh_frame",
+        "address": "0x2975c0",
+        "offset": "0x2975c0",
+        "size": 66
+      },
+      {
+        "index": 7,
+        "name": ".text",
+        "address": "0x298000",
+        "offset": "0x298000",
+        "size": 6286592
+      },
+      {
+        "index": 8,
+        "name": ".dynamic",
+        "address": "0x898000",
+        "offset": "0x898000",
+        "size": 96
+      },
+      {
+        "index": 9,
+        "name": ".bss",
+        "address": "0x898060",
+        "offset": "0x898060",
+        "size": 48
+      },
+      {
+        "index": 10,
+        "name": ".shstrtab",
+        "address": "0x0",
+        "offset": "0x898090",
+        "size": 90
+      }
+    ],
+    "symbols": [
+      {
+        "name": "",
+        "address": "0x0",
+        "size": 0
+      },
+      {
+        "name": "_kDartVmSnapshotInstructions",
+        "address": "0x298000",
+        "size": 27504
+      },
+      {
+        "name": "_kDartIsolateSnapshotInstructions",
+        "address": "0x29eb80",
+        "size": 6259008
+      },
+      {
+        "name": "_kDartVmSnapshotData",
+        "address": "0x340",
+        "size": 38832
+      },
+      {
+        "name": "_kDartIsolateSnapshotData",
+        "address": "0x9b00",
+        "size": 2677440
+      },
+      {
+        "name": "_kDartSnapshotBuildId",
+        "address": "0x1c8",
+        "size": 32
+      }
+    ],
+    "snapshot_version": "1ce86630892e2dca9a8543fdb8ed8e22",
+    "snapshot_features": "product no-code_comments dwarf_stack_traces_mode dedup_instructions no-tsan no-msan no-shared_data x64 windows no-compressed-pointers",
+    "recovered_string_count": 21336,
+    "limitations": [
+      "String scanner is supplemental static evidence, not a complete Dart snapshot parser.",
+      "String presence does not establish defaults, call flow, negotiated codec, or runtime behavior.",
+      "No target execution, configuration or user session log access."
+    ]
+  },
+  "dart_literals": [
+    {
+      "offset": 1851648,
+      "hex": "0x1c4100",
+      "length": 11,
+      "encoding": "latin1",
+      "text": "autoBitrate"
+    },
+    {
+      "offset": 1878736,
+      "hex": "0x1caad0",
+      "length": 16,
+      "encoding": "utf16le",
+      "text": "间隔小于50毫秒，不获取屏幕截图"
+    },
+    {
+      "offset": 1892816,
+      "hex": "0x1ce1d0",
+      "length": 15,
+      "encoding": "latin1",
+      "text": "getDisplayMedia"
+    },
+    {
+      "offset": 1896384,
+      "hex": "0x1cefc0",
+      "length": 21,
+      "encoding": "latin1",
+      "text": "disableHardwareDecode"
+    },
+    {
+      "offset": 1902656,
+      "hex": "0x1d0840",
+      "length": 15,
+      "encoding": "utf16le",
+      "text": "间隔小于50毫秒，不发送屏幕墙"
+    },
+    {
+      "offset": 1936304,
+      "hex": "0x1d8bb0",
+      "length": 4,
+      "encoding": "utf16le",
+      "text": "网络模式"
+    },
+    {
+      "offset": 1941808,
+      "hex": "0x1da130",
+      "length": 15,
+      "encoding": "latin1",
+      "text": "avgDecodeTimeMs"
+    },
+    {
+      "offset": 1944288,
+      "hex": "0x1daae0",
+      "length": 4,
+      "encoding": "utf16le",
+      "text": "保分辨率"
+    },
+    {
+      "offset": 1965024,
+      "hex": "0x1dfbe0",
+      "length": 29,
+      "encoding": "latin1",
+      "text": "disableHardwareDecodeZerocopy"
+    },
+    {
+      "offset": 1977856,
+      "hex": "0x1e2e00",
+      "length": 3,
+      "encoding": "latin1",
+      "text": "Gdi"
+    },
+    {
+      "offset": 2000752,
+      "hex": "0x1e8770",
+      "length": 21,
+      "encoding": "latin1",
+      "text": "powerEfficientEncoder"
+    },
+    {
+      "offset": 2060960,
+      "hex": "0x1f72a0",
+      "length": 4,
+      "encoding": "latin1",
+      "text": "H265"
+    },
+    {
+      "offset": 2063952,
+      "hex": "0x1f7e50",
+      "length": 3,
+      "encoding": "utf16le",
+      "text": "保帧率"
+    },
+    {
+      "offset": 2068720,
+      "hex": "0x1f90f0",
+      "length": 13,
+      "encoding": "latin1",
+      "text": "relayProtocol"
+    },
+    {
+      "offset": 2092000,
+      "hex": "0x1febe0",
+      "length": 27,
+      "encoding": "latin1",
+      "text": "changeDegradationPreference"
+    },
+    {
+      "offset": 2094864,
+      "hex": "0x1ff710",
+      "length": 8,
+      "encoding": "latin1",
+      "text": "balanced"
+    },
+    {
+      "offset": 2095920,
+      "hex": "0x1ffb30",
+      "length": 5,
+      "encoding": "utf16le",
+      "text": "自适应降级"
+    },
+    {
+      "offset": 2099440,
+      "hex": "0x2008f0",
+      "length": 4,
+      "encoding": "utf16le",
+      "text": "降级模式"
+    },
+    {
+      "offset": 2104832,
+      "hex": "0x201e00",
+      "length": 3,
+      "encoding": "utf16le",
+      "text": "低延迟"
+    },
+    {
+      "offset": 2144720,
+      "hex": "0x20b9d0",
+      "length": 4,
+      "encoding": "utf16le",
+      "text": "禁用降级"
+    },
+    {
+      "offset": 2184848,
+      "hex": "0x215690",
+      "length": 30,
+      "encoding": "latin1",
+      "text": "onSelectedCandidatePairChanged"
+    },
+    {
+      "offset": 2272752,
+      "hex": "0x22adf0",
+      "length": 33,
+      "encoding": "latin1",
+      "text": "maintain-framerate-and-resolution"
+    },
+    {
+      "offset": 2285184,
+      "hex": "0x22de80",
+      "length": 12,
+      "encoding": "latin1",
+      "text": "network_mode"
+    },
+    {
+      "offset": 2286192,
+      "hex": "0x22e270",
+      "length": 4,
+      "encoding": "latin1",
+      "text": "H264"
+    },
+    {
+      "offset": 2361168,
+      "hex": "0x240750",
+      "length": 15,
+      "encoding": "utf16le",
+      "text": "优先保证画面的帧率，牺牲分辨率"
+    },
+    {
+      "offset": 2388464,
+      "hex": "0x2471f0",
+      "length": 36,
+      "encoding": "utf16le",
+      "text": "限定屏幕高度最大值是1080，以免分辨率过高导致编解码不过来，视频流空白"
+    },
+    {
+      "offset": 2412192,
+      "hex": "0x24cea0",
+      "length": 18,
+      "encoding": "latin1",
+      "text": "iceTransportPolicy"
+    },
+    {
+      "offset": 2423120,
+      "hex": "0x24f950",
+      "length": 31,
+      "encoding": "latin1",
+      "text": "/desk_config/default_rtc_config"
+    },
+    {
+      "offset": 2432096,
+      "hex": "0x251c60",
+      "length": 13,
+      "encoding": "latin1",
+      "text": "candidateType"
+    },
+    {
+      "offset": 2444064,
+      "hex": "0x254b20",
+      "length": 21,
+      "encoding": "latin1",
+      "text": "decoderImplementation"
+    },
+    {
+      "offset": 2448128,
+      "hex": "0x255b00",
+      "length": 8,
+      "encoding": "latin1",
+      "text": "low_mode"
+    },
+    {
+      "offset": 2460224,
+      "hex": "0x258a40",
+      "length": 15,
+      "encoding": "utf16le",
+      "text": "不主动降分辨率和帧率，牺牲画质"
+    },
+    {
+      "offset": 2465328,
+      "hex": "0x259e30",
+      "length": 2,
+      "encoding": "utf16le",
+      "text": "平衡"
+    },
+    {
+      "offset": 2467840,
+      "hex": "0x25a800",
+      "length": 8,
+      "encoding": "latin1",
+      "text": "disabled"
+    },
+    {
+      "offset": 2476128,
+      "hex": "0x25c860",
+      "length": 21,
+      "encoding": "latin1",
+      "text": "encoderImplementation"
+    },
+    {
+      "offset": 2498064,
+      "hex": "0x261e10",
+      "length": 21,
+      "encoding": "latin1",
+      "text": "degradationPreference"
+    },
+    {
+      "offset": 2502896,
+      "hex": "0x2630f0",
+      "length": 11,
+      "encoding": "latin1",
+      "text": "encoderMode"
+    },
+    {
+      "offset": 2531584,
+      "hex": "0x26a100",
+      "length": 11,
+      "encoding": "latin1",
+      "text": "captureMode"
+    },
+    {
+      "offset": 2556368,
+      "hex": "0x2701d0",
+      "length": 21,
+      "encoding": "latin1",
+      "text": "powerEfficientDecoder"
+    },
+    {
+      "offset": 2561792,
+      "hex": "0x271700",
+      "length": 15,
+      "encoding": "latin1",
+      "text": "avgEncodeTimeMs"
+    },
+    {
+      "offset": 2564192,
+      "hex": "0x272060",
+      "length": 42,
+      "encoding": "latin1",
+      "text": "RemoteWindow fallback stream create catch:"
+    },
+    {
+      "offset": 2575936,
+      "hex": "0x274e40",
+      "length": 29,
+      "encoding": "latin1",
+      "text": "disableHardwareEncodeZerocopy"
+    },
+    {
+      "offset": 2589744,
+      "hex": "0x278430",
+      "length": 19,
+      "encoding": "latin1",
+      "text": "maintain-resolution"
+    },
+    {
+      "offset": 2589856,
+      "hex": "0x2784a0",
+      "length": 18,
+      "encoding": "latin1",
+      "text": "maintain-framerate"
+    },
+    {
+      "offset": 2617280,
+      "hex": "0x27efc0",
+      "length": 21,
+      "encoding": "latin1",
+      "text": "disableHardwareEncode"
+    },
+    {
+      "offset": 2635728,
+      "hex": "0x2837d0",
+      "length": 11,
+      "encoding": "latin1",
+      "text": "lockBitrate"
+    },
+    {
+      "offset": 2643872,
+      "hex": "0x2857a0",
+      "length": 3,
+      "encoding": "latin1",
+      "text": "gdi"
+    },
+    {
+      "offset": 2666448,
+      "hex": "0x28afd0",
+      "length": 15,
+      "encoding": "utf16le",
+      "text": "优先保证画面的分辨率，牺牲帧率"
+    }
+  ],
+  "native": [
+    {
+      "path": "D:\\BilldDesk\\flutter_webrtc_plugin.dll",
+      "sha256": "f1f0e5fe955913e6488646e90e190de41afccede3ab3e79dfcd1c1c05c9bfa3e",
+      "bytes": 498176,
+      "image_base": "0x180000000",
+      "media_exports": [],
+      "references": [
+        {
+          "rva": "0x256e2",
+          "file_offset": "0x24ae2",
+          "function_rva": "0x25670",
+          "instruction": "movups xmm0, xmmword ptr [rip + 0x3c3e7]",
+          "target_rva": "0x61ad0",
+          "string": "disableHardwareEncode",
+          "string_offset": "0x60cd0"
+        },
+        {
+          "rva": "0x25775",
+          "file_offset": "0x24b75",
+          "function_rva": "0x25670",
+          "instruction": "movups xmm0, xmmword ptr [rip + 0x3c36c]",
+          "target_rva": "0x61ae8",
+          "string": "disableHardwareDecode",
+          "string_offset": "0x60ce8"
+        },
+        {
+          "rva": "0x2580b",
+          "file_offset": "0x24c0b",
+          "function_rva": "0x25670",
+          "instruction": "movups xmm0, xmmword ptr [rip + 0x3c2ee]",
+          "target_rva": "0x61b00",
+          "string": "disableHardwareEncodeZerocopy",
+          "string_offset": "0x60d00"
+        },
+        {
+          "rva": "0x258ae",
+          "file_offset": "0x24cae",
+          "function_rva": "0x25670",
+          "instruction": "movups xmm0, xmmword ptr [rip + 0x3c26b]",
+          "target_rva": "0x61b20",
+          "string": "disableHardwareDecodeZerocopy",
+          "string_offset": "0x60d20"
+        },
+        {
+          "rva": "0x25940",
+          "file_offset": "0x24d40",
+          "function_rva": "0x25670",
+          "instruction": "movsd xmm0, qword ptr [rip + 0x3c1f8]",
+          "target_rva": "0x61b40",
+          "string": "hardwareEncoder",
+          "string_offset": "0x60d40"
+        },
+        {
+          "rva": "0x259d5",
+          "file_offset": "0x24dd5",
+          "function_rva": "0x25670",
+          "instruction": "movsd xmm0, qword ptr [rip + 0x3c173]",
+          "target_rva": "0x61b50",
+          "string": "hardwareDecoder",
+          "string_offset": "0x60d50"
+        },
+        {
+          "rva": "0x25a6d",
+          "file_offset": "0x24e6d",
+          "function_rva": "0x25670",
+          "instruction": "call qword ptr [rip + 0x3a955]",
+          "target_rva": "0x603c8",
+          "import": "libwebrtc.dll!?SetHardwareVideoEncodeVendorPreference@LibWebRTC@libwebrtc@@SAXPEBD@Z"
+        },
+        {
+          "rva": "0x25a8a",
+          "file_offset": "0x24e8a",
+          "function_rva": "0x25670",
+          "instruction": "call qword ptr [rip + 0x3a930]",
+          "target_rva": "0x603c0",
+          "import": "libwebrtc.dll!?SetHardwareVideoDecodeVendorPreference@LibWebRTC@libwebrtc@@SAXPEBD@Z"
+        },
+        {
+          "rva": "0x25a94",
+          "file_offset": "0x24e94",
+          "function_rva": "0x25670",
+          "instruction": "call qword ptr [rip + 0x3a93e]",
+          "target_rva": "0x603d8",
+          "import": "libwebrtc.dll!?SetHardwareVideoEncodeAccelerationDisabled@LibWebRTC@libwebrtc@@SAX_N@Z"
+        },
+        {
+          "rva": "0x25a9e",
+          "file_offset": "0x24e9e",
+          "function_rva": "0x25670",
+          "instruction": "call qword ptr [rip + 0x3a92c]",
+          "target_rva": "0x603d0",
+          "import": "libwebrtc.dll!?SetHardwareVideoDecodeAccelerationDisabled@LibWebRTC@libwebrtc@@SAX_N@Z"
+        },
+        {
+          "rva": "0x25aa8",
+          "file_offset": "0x24ea8",
+          "function_rva": "0x25670",
+          "instruction": "call qword ptr [rip + 0x3a90a]",
+          "target_rva": "0x603b8",
+          "import": "libwebrtc.dll!?SetHardwareVideoEncodeZeroCopyDisabled@LibWebRTC@libwebrtc@@SAX_N@Z"
+        },
+        {
+          "rva": "0x25ab1",
+          "file_offset": "0x24eb1",
+          "function_rva": "0x25670",
+          "instruction": "call qword ptr [rip + 0x3a8f9]",
+          "target_rva": "0x603b0",
+          "import": "libwebrtc.dll!?SetHardwareVideoDecodeZeroCopyDisabled@LibWebRTC@libwebrtc@@SAX_N@Z"
+        },
+        {
+          "rva": "0x412ea",
+          "file_offset": "0x406ea",
+          "function_rva": "0x40f40",
+          "instruction": "lea rdx, [rip + 0x2140f]",
+          "target_rva": "0x62700",
+          "string": "network_mode",
+          "string_offset": "0x61900"
+        },
+        {
+          "rva": "0x417a4",
+          "file_offset": "0x40ba4",
+          "function_rva": "0x40f40",
+          "instruction": "call qword ptr [rip + 0x1ebe6]",
+          "target_rva": "0x60390",
+          "import": "libwebrtc.dll!?SetScreenShareNetworkMode@LibWebRTC@libwebrtc@@SAXPEBD@Z"
+        }
+      ],
+      "limitations": [
+        "Static imports and string references do not prove runtime selection or executed paths.",
+        "Function ranges are PE unwind ranges and may split source functions.",
+        "Only direct RIP-relative and literal direct call/jump references are retained; indirect flow remains incomplete."
+      ]
+    },
+    {
+      "path": "D:\\BilldDesk\\libwebrtc.dll",
+      "sha256": "9d7933cc2eefe111502e7ef5aef23a07a943209590ffb781d3f494149d7392c1",
+      "bytes": 20515328,
+      "image_base": "0x180000000",
+      "media_exports": [
+        {
+          "rva": "0x22c0",
+          "name": "?SetHardwareVideoDecodeAccelerationDisabled@LibWebRTC@libwebrtc@@SAX_N@Z"
+        },
+        {
+          "rva": "0x22e0",
+          "name": "?SetHardwareVideoDecodeVendorPreference@LibWebRTC@libwebrtc@@SAXPEBD@Z"
+        },
+        {
+          "rva": "0x2300",
+          "name": "?SetHardwareVideoDecodeZeroCopyDisabled@LibWebRTC@libwebrtc@@SAX_N@Z"
+        },
+        {
+          "rva": "0x22b0",
+          "name": "?SetHardwareVideoEncodeAccelerationDisabled@LibWebRTC@libwebrtc@@SAX_N@Z"
+        },
+        {
+          "rva": "0x22d0",
+          "name": "?SetHardwareVideoEncodeVendorPreference@LibWebRTC@libwebrtc@@SAXPEBD@Z"
+        },
+        {
+          "rva": "0x22f0",
+          "name": "?SetHardwareVideoEncodeZeroCopyDisabled@LibWebRTC@libwebrtc@@SAX_N@Z"
+        },
+        {
+          "rva": "0x2310",
+          "name": "?SetScreenShareNetworkMode@LibWebRTC@libwebrtc@@SAXPEBD@Z"
+        }
+      ],
+      "references": [
+        {
+          "rva": "0x3b885b",
+          "file_offset": "0x3b7c5b",
+          "function_rva": "0x3b8490",
+          "instruction": "lea rax, [rip + 0xda7526]",
+          "target_rva": "0x115fd88",
+          "string": "..\\..\\api\\video\\d3d11_texture_buffer.cc",
+          "string_offset": "0x115e588"
+        },
+        {
+          "rva": "0x3b948b",
+          "file_offset": "0x3b888b",
+          "function_rva": "0x3b8ee0",
+          "instruction": "lea rax, [rip + 0xda68f6]",
+          "target_rva": "0x115fd88",
+          "string": "..\\..\\api\\video\\d3d11_texture_buffer.cc",
+          "string_offset": "0x115e588"
+        },
+        {
+          "rva": "0x561a0b",
+          "file_offset": "0x560e0b",
+          "function_rva": "0x561880",
+          "instruction": "lea r8, [rip + 0xc1d982]",
+          "target_rva": "0x117f394",
+          "string": "[NVENC Encoder] ConvertD3D11TextureToNv12: no video device hr=0x%x",
+          "string_offset": "0x117db94"
+        },
+        {
+          "rva": "0x561ac3",
+          "file_offset": "0x560ec3",
+          "function_rva": "0x561880",
+          "instruction": "lea r8, [rip + 0xc1d90d]",
+          "target_rva": "0x117f3d7",
+          "string": "[NVENC Encoder] ConvertD3D11TextureToNv12: no video context hr=0x%x",
+          "string_offset": "0x117dbd7"
+        },
+        {
+          "rva": "0x561f9b",
+          "file_offset": "0x56139b",
+          "function_rva": "0x561880",
+          "instruction": "lea r8, [rip + 0xc1d4b7]",
+          "target_rva": "0x117f459",
+          "string": "[NVENC Encoder] ConvertD3D11TextureToNv12: CreateVideoProcessorEnumerator failed hr=0x%x",
+          "string_offset": "0x117dc59"
+        },
+        {
+          "rva": "0x56202d",
+          "file_offset": "0x56142d",
+          "function_rva": "0x561880",
+          "instruction": "lea r8, [rip + 0xc1d4a7]",
+          "target_rva": "0x117f4db",
+          "string": "[NVENC Encoder] ConvertD3D11TextureToNv12: CreateVideoProcessor failed hr=0x%x",
+          "string_offset": "0x117dcdb"
+        },
+        {
+          "rva": "0x562111",
+          "file_offset": "0x561511",
+          "function_rva": "0x561880",
+          "instruction": "lea r8, [rip + 0xc1d4a3]",
+          "target_rva": "0x117f5bb",
+          "string": "[NVENC Encoder] ConvertD3D11TextureToNv12: CreateVideoProcessorInputView failed hr=0x%x",
+          "string_offset": "0x117ddbb"
+        },
+        {
+          "rva": "0x562203",
+          "file_offset": "0x561603",
+          "function_rva": "0x561880",
+          "instruction": "lea r8, [rip + 0xc1d33e]",
+          "target_rva": "0x117f548",
+          "string": "[NVENC Encoder] ConvertD3D11TextureToNv12: CreateVideoProcessorOutputView failed hr=0x%x",
+          "string_offset": "0x117dd48"
+        },
+        {
+          "rva": "0x56228e",
+          "file_offset": "0x56168e",
+          "function_rva": "0x561880",
+          "instruction": "lea r8, [rip + 0xc1d397]",
+          "target_rva": "0x117f62c",
+          "string": "[NVENC Encoder] ConvertD3D11TextureToNv12: VideoProcessorBlt failed hr=0x%x",
+          "string_offset": "0x117de2c"
+        },
+        {
+          "rva": "0x5644ce",
+          "file_offset": "0x5638ce",
+          "function_rva": "0x5642a0",
+          "instruction": "movups xmm0, xmmword ptr [rip + 0xc1b722]",
+          "target_rva": "0x117fbf7",
+          "string": "[NVENC Encoder] EncodeD3D11Texture: gpu scale/convert failed",
+          "string_offset": "0x117e3f7"
+        },
+        {
+          "rva": "0x56458e",
+          "file_offset": "0x56398e",
+          "function_rva": "0x5642a0",
+          "instruction": "movups xmm0, xmmword ptr [rip + 0xc1b598]",
+          "target_rva": "0x117fb2d",
+          "string": "[NVENC Encoder] EncodeD3D11Texture: failed to open shared texture",
+          "string_offset": "0x117e32d"
+        },
+        {
+          "rva": "0x56470f",
+          "file_offset": "0x563b0f",
+          "function_rva": "0x5642a0",
+          "instruction": "lea r8, [rip + 0xc1b3d8]",
+          "target_rva": "0x117faee",
+          "string": "[NVENC Encoder] EncodeD3D11Texture: unsupported DXGI format=%d",
+          "string_offset": "0x117e2ee"
+        },
+        {
+          "rva": "0x564786",
+          "file_offset": "0x563b86",
+          "function_rva": "0x5642a0",
+          "instruction": "movups xmm0, xmmword ptr [rip + 0xc1b4c3]",
+          "target_rva": "0x117fc50",
+          "string": "[NVENC Encoder] EncodeD3D11Texture: nv12 gpu copy failed",
+          "string_offset": "0x117e450"
+        },
+        {
+          "rva": "0x5648e2",
+          "file_offset": "0x563ce2",
+          "function_rva": "0x5642a0",
+          "instruction": "movups xmm0, xmmword ptr [rip + 0xc1b2c5]",
+          "target_rva": "0x117fbae",
+          "string": "[NVENC Encoder] EncodeD3D11Texture: failed to acquire source keyed mutex",
+          "string_offset": "0x117e3ae"
+        },
+        {
+          "rva": "0x5651aa",
+          "file_offset": "0x5645aa",
+          "function_rva": "0x565140",
+          "instruction": "movups xmm0, xmmword ptr [rip + 0xc1ab83]",
+          "target_rva": "0x117fd34",
+          "string": "[NVENC Encoder] InitSoftwareFallback: creating software H264 encoder",
+          "string_offset": "0x117e534"
+        },
+        {
+          "rva": "0x565313",
+          "file_offset": "0x564713",
+          "function_rva": "0x565140",
+          "instruction": "lea r8, [rip + 0xc1aaac]",
+          "target_rva": "0x117fdc6",
+          "string": "[NVENC Encoder] InitSoftwareFallback: ret=%d",
+          "string_offset": "0x117e5c6"
+        },
+        {
+          "rva": "0x565370",
+          "file_offset": "0x564770",
+          "function_rva": "0x565140",
+          "instruction": "lea r8, [rip + 0xc1aa02]",
+          "target_rva": "0x117fd79",
+          "string": "[NVENC Encoder] InitSoftwareFallback: no software fallback for codec type %d",
+          "string_offset": "0x117e579"
+        },
+        {
+          "rva": "0x5658ef",
+          "file_offset": "0x564cef",
+          "function_rva": "0x5655a0",
+          "instruction": "movups xmm0, xmmword ptr [rip + 0xc1a5cb]",
+          "target_rva": "0x117fec1",
+          "string": "[NVENC Encoder] InitEncode: native NVENC initialize failed",
+          "string_offset": "0x117e6c1"
+        },
+        {
+          "rva": "0x566eff",
+          "file_offset": "0x5662ff",
+          "function_rva": "0x566eb0",
+          "instruction": "movups xmm0, xmmword ptr [rip + 0xc192ba]",
+          "target_rva": "0x11801c0",
+          "string": "[NVENC Encoder] NvencEncoderFactory::Create called",
+          "string_offset": "0x117e9c0"
+        },
+        {
+          "rva": "0x7a2fbb",
+          "file_offset": "0x7a23bb",
+          "function_rva": "0x7a2e10",
+          "instruction": "lea rax, [rip + 0x9fc33a]",
+          "target_rva": "0x119f2fc",
+          "string": "WebRTC.DesktopCapture.Win.ScreenGdiCapturerFrameTime",
+          "string_offset": "0x119dafc"
+        },
+        {
+          "rva": "0xb44a64",
+          "file_offset": "0xb43e64",
+          "function_rva": "0xb44590",
+          "instruction": "lea r8, [rip + 0x71f6a6]",
+          "target_rva": "0x1264111",
+          "string": "Failed to convert IDXGIResource to ID3D11Texture2D: ",
+          "string_offset": "0x1262911"
+        },
+        {
+          "rva": "0xd58a4b",
+          "file_offset": "0xd57e4b",
+          "function_rva": "0xd587e0",
+          "instruction": "lea r8, [rip + 0x561d5d]",
+          "target_rva": "0x12ba7af",
+          "string": "Failed to create a new ID3D11Texture2D as stage: ",
+          "string_offset": "0x12b8faf"
+        },
+        {
+          "rva": "0xd58b9f",
+          "file_offset": "0xd57f9f",
+          "function_rva": "0xd587e0",
+          "instruction": "lea r8, [rip + 0x561c3b]",
+          "target_rva": "0x12ba7e1",
+          "string": "Failed to convert ID3D11Texture2D to IDXGISurface: ",
+          "string_offset": "0x12b8fe1"
+        },
+        {
+          "rva": "0xd591f8",
+          "file_offset": "0xd585f8",
+          "function_rva": "0xd59140",
+          "instruction": "lea r8, [rip + 0x50af12]",
+          "target_rva": "0x1264111",
+          "string": "Failed to convert IDXGIResource to ID3D11Texture2D: ",
+          "string_offset": "0x1262911"
+        }
+      ],
+      "limitations": [
+        "Static imports and string references do not prove runtime selection or executed paths.",
+        "Function ranges are PE unwind ranges and may split source functions.",
+        "Only direct RIP-relative and literal direct call/jump references are retained; indirect flow remains incomplete."
+      ]
+    },
+    {
+      "path": "D:\\BilldDesk\\billd_simulator_plugin.dll",
+      "sha256": "76e2574bddb1cc89a42edf5b2eaeb463fa289bea5bfe753d0715059481c8dae3",
+      "bytes": 506880,
+      "image_base": "0x180000000",
+      "media_exports": [],
+      "references": [
+        {
+          "rva": "0x13558",
+          "file_offset": "0x12958",
+          "function_rva": "0x134d0",
+          "instruction": "lea rdx, [rip + 0x4ece1]",
+          "target_rva": "0x62240",
+          "string": "[privacy-screen] forcing GDI capture fallback on legacy Windows, requestedMode=",
+          "string_offset": "0x60840"
+        },
+        {
+          "rva": "0x1370d",
+          "file_offset": "0x12b0d",
+          "function_rva": "0x134d0",
+          "instruction": "lea rdx, [rip + 0x4eb94]",
+          "target_rva": "0x622a8",
+          "string": "captureTimeMs",
+          "string_offset": "0x608a8"
+        },
+        {
+          "rva": "0x1375a",
+          "file_offset": "0x12b5a",
+          "function_rva": "0x134d0",
+          "instruction": "lea rdx, [rip + 0x4eb57]",
+          "target_rva": "0x622b8",
+          "string": "encodeTimeMs",
+          "string_offset": "0x608b8"
+        },
+        {
+          "rva": "0x29146",
+          "file_offset": "0x28546",
+          "function_rva": "0x290ff",
+          "instruction": "lea rdx, [rip + 0x35bfb]",
+          "target_rva": "0x5ed48",
+          "string": "avif: fallback to aom",
+          "string_offset": "0x5d348"
+        },
+        {
+          "rva": "0x29186",
+          "file_offset": "0x28586",
+          "function_rva": "0x290ff",
+          "instruction": "lea rdx, [rip + 0x35bd3]",
+          "target_rva": "0x5ed60",
+          "string": "avif: fallback to svt",
+          "string_offset": "0x5d360"
+        },
+        {
+          "rva": "0x29ffd",
+          "file_offset": "0x293fd",
+          "function_rva": "0x29c00",
+          "instruction": "lea rdx, [rip + 0x371a4]",
+          "target_rva": "0x611a8",
+          "string": "[DXGI helper] capture failed: ",
+          "string_offset": "0x5f7a8"
+        },
+        {
+          "rva": "0x2c0b7",
+          "file_offset": "0x2b4b7",
+          "function_rva": "0x2ad90",
+          "instruction": "lea rdx, [rip + 0x3527a]",
+          "target_rva": "0x61338",
+          "string": "[WGC] StartCapture called",
+          "string_offset": "0x5f938"
+        }
+      ],
+      "limitations": [
+        "Static imports and string references do not prove runtime selection or executed paths.",
+        "Function ranges are PE unwind ranges and may split source functions.",
+        "Only direct RIP-relative and literal direct call/jump references are retained; indirect flow remains incomplete."
+      ]
+    },
+    {
+      "path": "D:\\BilldDesk\\billddesk_simulator_helper.exe",
+      "sha256": "69affb8e118eaa85cd75f0bd168e176d19dc58a5b063416c694292892e8a2035",
+      "bytes": 81408,
+      "image_base": "0x140000000",
+      "media_exports": [],
+      "references": [],
+      "limitations": [
+        "Static imports and string references do not prove runtime selection or executed paths.",
+        "Function ranges are PE unwind ranges and may split source functions.",
+        "Only direct RIP-relative and literal direct call/jump references are retained; indirect flow remains incomplete."
+      ]
+    },
+    {
+      "path": "D:\\BilldDesk\\BilldDeskService.exe",
+      "sha256": "ef9b4e69896e1d778b75eb0ce4ff238117ace8d033a89b3976e28442c1810af7",
+      "bytes": 104448,
+      "image_base": "0x140000000",
+      "media_exports": [],
+      "references": [],
+      "limitations": [
+        "Static imports and string references do not prove runtime selection or executed paths.",
+        "Function ranges are PE unwind ranges and may split source functions.",
+        "Only direct RIP-relative and literal direct call/jump references are retained; indirect flow remains incomplete."
+      ]
+    },
+    {
+      "path": "D:\\BilldDesk\\BilldDesk.exe",
+      "sha256": "fd729825f1afe6df69aa09e84b555a232a8b2ac64576632031c3e90b28660724",
+      "bytes": 216064,
+      "image_base": "0x140000000",
+      "media_exports": [],
+      "references": [],
+      "limitations": [
+        "Static imports and string references do not prove runtime selection or executed paths.",
+        "Function ranges are PE unwind ranges and may split source functions.",
+        "Only direct RIP-relative and literal direct call/jump references are retained; indirect flow remains incomplete."
+      ]
+    }
+  ],
+  "network_and_encoder_direct_references": [
+    {
+      "rva": "0x27778",
+      "target_rva": "0x3bd070",
+      "function_rva": "0x27770",
+      "instruction": "call 0x1803bd070"
+    },
+    {
+      "rva": "0x27989",
+      "target_rva": "0x3bd070",
+      "function_rva": "0x277f0",
+      "instruction": "call 0x1803bd070"
+    },
+    {
+      "rva": "0x3bd030",
+      "target_rva": "0x133f0cc",
+      "function_rva": null,
+      "instruction": "mov dword ptr [rip + 0xf82096], ecx"
+    },
+    {
+      "rva": "0x3bd050",
+      "target_rva": "0x133f0cc",
+      "function_rva": null,
+      "instruction": "mov eax, dword ptr [rip + 0xf82076]"
+    },
+    {
+      "rva": "0x3bd7ae",
+      "target_rva": "0x3bd070",
+      "function_rva": "0x3bd770",
+      "instruction": "call 0x1803bd070"
+    },
+    {
+      "rva": "0x3bde71",
+      "target_rva": "0x3bd070",
+      "function_rva": "0x3bde40",
+      "instruction": "call 0x1803bd070"
+    },
+    {
+      "rva": "0x3be3fb",
+      "target_rva": "0x3bd070",
+      "function_rva": "0x3be3c0",
+      "instruction": "call 0x1803bd070"
+    },
+    {
+      "rva": "0x56595d",
+      "target_rva": "0x565140",
+      "function_rva": "0x5655a0",
+      "instruction": "call 0x180565140"
+    },
+    {
+      "rva": "0x565e0d",
+      "target_rva": "0x5642a0",
+      "function_rva": "0x565a40",
+      "instruction": "call 0x1805642a0"
+    },
+    {
+      "rva": "0x788ace",
+      "target_rva": "0x3bd050",
+      "function_rva": "0x788780",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0x788b2c",
+      "target_rva": "0x3bd050",
+      "function_rva": "0x788780",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0x788df7",
+      "target_rva": "0x3bd050",
+      "function_rva": "0x788780",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0x789739",
+      "target_rva": "0x3bd050",
+      "function_rva": "0x7896b0",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0x78a25d",
+      "target_rva": "0x3bd050",
+      "function_rva": "0x78a0f0",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0x78a299",
+      "target_rva": "0x3bd050",
+      "function_rva": "0x78a0f0",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0x78e569",
+      "target_rva": "0x3bd050",
+      "function_rva": "0x78db40",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0x78e879",
+      "target_rva": "0x3bd050",
+      "function_rva": "0x78db40",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0x791442",
+      "target_rva": "0x3bd050",
+      "function_rva": "0x791330",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0x791704",
+      "target_rva": "0x3bd050",
+      "function_rva": "0x791510",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0x7dfd88",
+      "target_rva": "0x3bd050",
+      "function_rva": "0x7dfd40",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0x7dfe9e",
+      "target_rva": "0x3bd050",
+      "function_rva": "0x7dfd40",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0x7dff99",
+      "target_rva": "0x3bd050",
+      "function_rva": "0x7dfee0",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0x7e089b",
+      "target_rva": "0x3bd050",
+      "function_rva": "0x7e0700",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0x7e112c",
+      "target_rva": "0x3bd050",
+      "function_rva": "0x7e0700",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0x9cbee2",
+      "target_rva": "0x3bd050",
+      "function_rva": "0x9cbe00",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0x9ccd5d",
+      "target_rva": "0x3bd050",
+      "function_rva": "0x9ccce0",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0x9ccdb1",
+      "target_rva": "0x3bd050",
+      "function_rva": "0x9ccce0",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0x9cce8a",
+      "target_rva": "0x3bd050",
+      "function_rva": "0x9ccce0",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0x9cd17d",
+      "target_rva": "0x3bd050",
+      "function_rva": "0x9cd090",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0x9cd294",
+      "target_rva": "0x3bd050",
+      "function_rva": "0x9cd090",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0x9cd4cd",
+      "target_rva": "0x3bd050",
+      "function_rva": "0x9cd4b0",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0xb159c6",
+      "target_rva": "0x3bd050",
+      "function_rva": "0xb15760",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0xb159ee",
+      "target_rva": "0x3bd050",
+      "function_rva": "0xb15760",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0xb15ba6",
+      "target_rva": "0x3bd050",
+      "function_rva": "0xb15760",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0xb84c91",
+      "target_rva": "0x3bd050",
+      "function_rva": "0xb84c40",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0xb8532f",
+      "target_rva": "0x3bd050",
+      "function_rva": "0xb852a0",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0xd6f0ee",
+      "target_rva": "0x3bd050",
+      "function_rva": "0xd6f0d0",
+      "instruction": "call 0x1803bd050"
+    },
+    {
+      "rva": "0xd6f468",
+      "target_rva": "0x3bd050",
+      "function_rva": "0xd6f460",
+      "instruction": "call 0x1803bd050"
+    }
+  ],
+  "native_branch_ledger": [
+    {
+      "file": "libwebrtc.dll",
+      "rva": "0x2310",
+      "observation": "Compares input with low_mode and calls setter at 0x3bd030; setter writes process-global flag at RVA 0x133f0cc."
+    },
+    {
+      "file": "libwebrtc.dll",
+      "rva": "0x56595d",
+      "observation": "NVENC InitEncode failure path calls 0x565140; that routine has software H264 branch and no-software-fallback branch for other codec types."
+    },
+    {
+      "file": "billd_simulator_plugin.dll",
+      "rva": "0x13963",
+      "observation": "Capture dispatcher routes modes 1 and 2 to helper routine 0x29c00, mode 3 to WGC routine 0x2ad90, other values to GDI routine 0x2a150."
+    },
+    {
+      "file": "billd_simulator_plugin.dll",
+      "rva": "0x13530",
+      "observation": "Privacy/legacy-system condition branches to GDI capture at 0x13581 before normal mode dispatch; exact upstream source condition names unavailable."
+    },
+    {
+      "file": "flutter_webrtc_plugin.dll",
+      "rva": "0x24f67",
+      "observation": "degradationPreference string comparison maps maintain-framerate to value 1, maintain-resolution to 2, balanced to 3, and maintain-framerate-and-resolution/disabled to 0."
+    }
+  ],
+  "limitations": [
+    "Embedded settings and capabilities do not establish active configuration, defaults, runtime selection, performance or triggers observed in a live session.",
+    "Dart literals were recovered by a supplemental snapshot string-object heuristic, not REA APK parsing or complete Dart deserialization.",
+    "Native references and selected disassembly supplement REA GNU objdump Evidence using pefile and Capstone; indirect control flow is incomplete.",
+    "Screenshot/AVIF/WebP and screen-wall capabilities must not be assumed to be an automatic fallback transport for the remote video stream."
+  ]
+}

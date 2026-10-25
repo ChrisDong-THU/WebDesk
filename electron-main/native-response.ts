@@ -14,7 +14,8 @@ export class NativeResponseDecoder {
       if (!this.payload) {
         const count = Math.min(8 - this.headerBytes, chunk.length - offset);
         chunk.copy(this.header, this.headerBytes, offset, offset + count);
-        offset += count; this.headerBytes += count;
+        offset += count;
+        this.headerBytes += count;
         if (this.headerBytes !== 8) continue;
         const length = this.header.readUInt32LE(4);
         if (length > this.limit) throw Error('Invalid native response');
@@ -23,13 +24,20 @@ export class NativeResponseDecoder {
       }
       const count = Math.min(this.payload.length - this.payloadBytes, chunk.length - offset);
       chunk.copy(this.payload, this.payloadBytes, offset, offset + count);
-      offset += count; this.payloadBytes += count;
+      offset += count;
+      this.payloadBytes += count;
       if (this.payloadBytes === this.payload.length) {
-        const payload = this.payload, error = this.error;
-        this.reset(); consume(error, payload);
+        const payload = this.payload,
+          error = this.error;
+        this.reset();
+        consume(error, payload);
       }
     }
   }
 
-  reset() { this.headerBytes = 0; this.payload = undefined; this.payloadBytes = 0; }
+  reset() {
+    this.headerBytes = 0;
+    this.payload = undefined;
+    this.payloadBytes = 0;
+  }
 }

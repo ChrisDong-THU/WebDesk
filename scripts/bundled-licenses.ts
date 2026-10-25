@@ -24,15 +24,25 @@ export function bundledLicenses(filename: string): Plugin {
         }
       }
       if (!packages.size) return;
-      const text = [...packages].sort(([a], [b]) => a.localeCompare(b)).map(([name, { directory, manifest }]) => {
-        const files = fs.readdirSync(directory).filter(name => /^(licen[cs]e|copying|notice)(\.|$)/i.test(name) && fs.statSync(path.join(directory, name)).isFile());
-        let license = files.map(file => fs.readFileSync(path.join(directory, file), 'utf8')).join('\n\n');
-        if (!license && manifest.name === '@nut-tree-fork/shared' && manifest.license === 'Apache-2.0') {
-          license = 'Copyright dry Software UG (haftungsbeschraenkt). Apache-2.0.\nFull Apache License text is included in THIRD_PARTY_NOTICES.md.';
-        }
-        if (!license) this.error(`Missing bundled license text: ${name}`);
-        return `${name} (${manifest.license || 'see text'})\n${'='.repeat(60)}\n${license}`;
-      }).join('\n\n');
+      const text = [...packages]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([name, { directory, manifest }]) => {
+          const files = fs
+            .readdirSync(directory)
+            .filter(
+              (name) =>
+                /^(licen[cs]e|copying|notice)(\.|$)/i.test(name) &&
+                fs.statSync(path.join(directory, name)).isFile(),
+            );
+          let license = files.map((file) => fs.readFileSync(path.join(directory, file), 'utf8')).join('\n\n');
+          if (!license && manifest.name === '@nut-tree-fork/shared' && manifest.license === 'Apache-2.0') {
+            license =
+              'Copyright dry Software UG (haftungsbeschraenkt). Apache-2.0.\nFull Apache License text is included in THIRD_PARTY_NOTICES.md.';
+          }
+          if (!license) this.error(`Missing bundled license text: ${name}`);
+          return `${name} (${manifest.license || 'see text'})\n${'='.repeat(60)}\n${license}`;
+        })
+        .join('\n\n');
       this.emitFile({ type: 'asset', fileName: filename, source: text });
     },
   };

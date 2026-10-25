@@ -8,11 +8,14 @@ function readManifest(file) {
   const directories = optional + (bytes.readUInt16LE(optional) === 0x20b ? 112 : 96);
   const resourceRva = bytes.readUInt32LE(directories + 16);
   const sections = optional + bytes.readUInt16LE(pe + 20);
-  const offset = rva => {
+  const offset = (rva) => {
     for (let i = 0; i < bytes.readUInt16LE(pe + 6); i++) {
       const section = sections + i * 40;
       const base = bytes.readUInt32LE(section + 12);
-      if (rva >= base && rva < base + Math.max(bytes.readUInt32LE(section + 8), bytes.readUInt32LE(section + 16))) {
+      if (
+        rva >= base &&
+        rva < base + Math.max(bytes.readUInt32LE(section + 8), bytes.readUInt32LE(section + 16))
+      ) {
         return bytes.readUInt32LE(section + 20) + rva - base;
       }
     }
@@ -25,7 +28,10 @@ function readManifest(file) {
     let entry;
     for (let i = 0; i < count; i++) {
       const candidate = directory + 16 + i * 8;
-      if (depth > 0 || bytes.readUInt32LE(candidate) === 24) { entry = candidate; break; }
+      if (depth > 0 || bytes.readUInt32LE(candidate) === 24) {
+        entry = candidate;
+        break;
+      }
     }
     if (entry === undefined) throw Error('Missing executable manifest');
     const target = bytes.readUInt32LE(entry + 4);
@@ -40,5 +46,18 @@ function assertAdministrator(file) {
     throw Error('WebDesk.exe is missing the upstream requireAdministrator manifest');
   }
 }
-module.exports = { readManifest, assertAdministrator };
-if (require.main === module) { assertAdministrator(process.argv[2]); console.log('Verified embedded requireAdministrator manifest'); }
+function assertInvoker(file) {
+  if (!/<requestedExecutionLevel\s[^>]*level=["']asInvoker["']/.test(readManifest(file))) {
+    throw Error('Test fixture must have an embedded asInvoker manifest');
+  }
+}
+module.exports = { readManifest, assertAdministrator, assertInvoker };
+if (require.main === module) {
+  if (process.argv[3] === '--as-invoker') {
+    assertInvoker(process.argv[2]);
+    console.log('Verified embedded asInvoker test manifest');
+  } else {
+    assertAdministrator(process.argv[2]);
+    console.log('Verified embedded requireAdministrator manifest');
+  }
+}

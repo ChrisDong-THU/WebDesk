@@ -17,6 +17,7 @@ Generated files identify their source and extraction scripts. UI, authentication
 - libwebrtc C++ wrapper — MIT, with the upstream Apache-2.0 NOTICE for Intel/OWT modifications. Both the wrapper license and NOTICE accompany the installer.
 - WebRTC — BSD-style license and additional patent grant. Texts and supplemental dependency licenses are in `third_party/licenses/`, copied into the installer's `licenses/native/`. `native/sources.json` records pinned source URLs and hashes. This collection includes optional/build-time dependencies and is not a binary dependency inventory. Dependency upgrades or changed native build flags require reviewing these notices again.
 - Microsoft Visual C++ runtime — redistributed from the selected Visual Studio toolchain under Microsoft's redistributable terms, not relicensed as MIT.
+- NVIDIA NVENC API 12.1 header — Copyright (c) 2010–2023 NVIDIA Corporation, MIT-style permission notice retained in the header and `third_party/licenses/nvenc-api-header.txt`. The optional encoder loads the system-installed NVIDIA driver; WebDesk does not distribute that driver.
 
 libjpeg-turbo acknowledgement: This software is based in part on the work of the Independent JPEG Group.
 

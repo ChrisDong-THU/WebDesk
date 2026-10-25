@@ -6,11 +6,19 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+// Test-only native diagnostics; the plugin exposes its log stream internally.
+// ignore: implementation_imports
+import 'package:flutter_webrtc/src/native/event_channel.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:webdesk/protocol/quality.dart';
 import 'package:webdesk/session/video_policy.dart';
 import 'package:webdesk/session/video_codecs.dart';
 import 'package:webdesk/session/peer_connection.dart';
+import 'package:webdesk/native/media_pipeline.dart';
+import 'package:webdesk/session/adaptive_video.dart';
+import 'package:webdesk/session/media_stats.dart';
+import 'package:webdesk/session/native_texture_policy.dart';
+import 'package:webdesk/session/codec_selection.dart';
 
 final picture = ValueNotifier<int>(0);
 int challenge = 0;
@@ -19,8 +27,17 @@ MediaStream? stream;
 final candidates = <Map<String, dynamic>>[];
 Quality quality = const Quality();
 int width = 3200, height = 2000;
+Timer? adaptationTimer;
+bool sampling = false;
+final adaptive = AdaptiveVideoPolicy();
+MediaStats measured = MediaStats();
+NativeTexturePolicy texturePolicy = NativeTexturePolicy();
+bool adaptTexture = true;
+CodecSelection codecSelection = CodecSelection();
 
 Future<void> stop() async {
+  adaptationTimer?.cancel();
+  adaptationTimer = null;
   await closePeerConnection(pc);
   pc = null;
   for (final track in stream?.getTracks() ?? <MediaStreamTrack>[]) {
@@ -29,6 +46,10 @@ Future<void> stop() async {
   await stream?.dispose();
   stream = null;
   candidates.clear();
+  adaptive.reset();
+  measured = MediaStats();
+  texturePolicy = NativeTexturePolicy();
+  codecSelection = CodecSelection();
 }
 
 Future<void> parameters() async {
@@ -36,13 +57,20 @@ Future<void> parameters() async {
     (s) => s.track?.kind == 'video',
   );
   final p = sender.parameters;
-  configureVideoParameters(p, quality, width, height);
+  configureVideoParameters(
+    p,
+    quality,
+    width,
+    height,
+    adaptation: adaptive.current,
+  );
   if (!await sender.setParameters(p)) throw StateError('setParameters failed');
 }
 
 Future<dynamic> command(String path, Map<String, dynamic> data) async {
   if (path == '/start') {
     await stop();
+    adaptTexture = data['adaptTexture'] as bool? ?? true;
     await windowManager.setAlwaysOnTop(true);
     await windowManager.show();
     await windowManager.focus();
@@ -52,9 +80,22 @@ Future<dynamic> command(String path, Map<String, dynamic> data) async {
       height: data['heightLimit'] as int,
       fps: data['fps'] as int,
       bitrate: data['kbps'] as int,
+      degradationPreference: data['degradationPreference'] as String? ?? 'auto',
+      networkMode: data['networkMode'] as String? ?? 'auto',
+      codecPreference: data['codec'] == 'auto'
+          ? 'auto'
+          : data['codec'] as String,
     );
     final sources = await desktopCapturer.getSources(
       types: [SourceType.Screen],
+    );
+    final nativeCapabilities = await MediaNative.capabilities();
+    final caps = await getRtpSenderCapabilities('video');
+    codecSelection.initialize(
+      caps.codecs!.map((c) => c.mimeType),
+      quality,
+      DateTime.now(),
+      hardware: nativeCapabilities['hardwareH264'] == true,
     );
     stream = await navigator.mediaDevices.getDisplayMedia({
       'audio': false,
@@ -63,6 +104,12 @@ Future<dynamic> command(String path, Map<String, dynamic> data) async {
         'cursor': 'never',
         'frameRate': quality.fps,
         'mandatory': {'frameRate': quality.fps},
+        'webdeskMaxHeight': quality.height,
+        'webdeskCaptureMode': data['captureMode'] as String? ?? 'auto',
+        'webdeskNativeTexture':
+            (data['nativeTexture'] as bool? ?? true) &&
+            nativeCapabilities['hardwareH264'] == true &&
+            codecSelection.order.firstOrNull == 'video/h264',
       },
     });
     pc = await createPeerConnection({
@@ -81,10 +128,9 @@ Future<dynamic> command(String path, Map<String, dynamic> data) async {
       picture.value++;
     };
     await pc!.addTrack(stream!.getVideoTracks().first, stream!);
-    final caps = await getRtpSenderCapabilities('video');
     final selected = data['codec'] as String;
     if (selected == 'auto' && data['platformOrder'] != true) {
-      await preferDesktopCodecs(pc!);
+      await preferDesktopCodecs(pc!, order: codecSelection.order);
     }
     if (selected != 'auto') {
       final codecs = caps.codecs!
@@ -116,19 +162,73 @@ Future<dynamic> command(String path, Map<String, dynamic> data) async {
     return {
       'sdp': offer.toMap(),
       'capabilities': caps.codecs!.map((c) => c.mimeType).toSet().toList(),
+      'codecCapabilities': caps.codecs!
+          .map((c) => {'mimeType': c.mimeType, 'fmtp': c.sdpFmtpLine})
+          .toList(),
+      'nativeCapabilities': nativeCapabilities,
     };
   }
   if (path == '/answer') {
     await pc!.setRemoteDescription(
       RTCSessionDescription(data['sdp'] as String, data['type'] as String),
     );
+    codecSelection.acceptAnswer(data['sdp'] as String);
+    for (var attempt = 0; attempt < 20; attempt++) {
+      final health = await MediaNative.captureStats(
+        stream!.getVideoTracks().first.id!,
+      );
+      if ((health['outputHeight'] as num? ?? 0) > 0) {
+        width = (health['outputWidth'] as num).toInt();
+        height = (health['outputHeight'] as num).toInt();
+        break;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
     await parameters();
+    adaptationTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+      final current = pc;
+      if (current == null || sampling) return;
+      sampling = true;
+      try {
+        final stats = measured.sample(await current.getStats());
+        final track = stream?.getVideoTracks().firstOrNull;
+        if (adaptTexture && pc == current && track?.id != null) {
+          final capture = await MediaNative.captureStats(track!.id!);
+          if (pc == current &&
+              texturePolicy.sample({
+                ...stats,
+                ...capture,
+                'captureTrackId': track.id,
+              }, quality.fps)) {
+            if (await MediaNative.setNativeTexture(track.id!, false)) return;
+          }
+        }
+        if (pc == current && adaptive.sample(stats, quality, DateTime.now())) {
+          await parameters();
+        }
+      } catch (error) {
+        if (pc == current) stderr.writeln('Adaptive sample: $error');
+      } finally {
+        sampling = false;
+      }
+    });
     return {'ok': true};
   }
   if (path == '/candidates') {
     final list = List.of(candidates);
     candidates.clear();
     return list;
+  }
+  if (path == '/codec') {
+    quality = quality.change('changeVideoCodec', data['codec']);
+    codecSelection.configure(quality, DateTime.now());
+    await preferDesktopCodecs(pc!, order: codecSelection.order);
+    final offer = await pc!.createOffer({
+      'offerToReceiveAudio': false,
+      'offerToReceiveVideo': false,
+    });
+    await pc!.setLocalDescription(offer);
+    return {'sdp': offer.toMap(), 'order': codecSelection.order};
   }
   if (path == '/stats') {
     return (await pc!.getStats())
@@ -141,6 +241,15 @@ Future<dynamic> command(String path, Map<String, dynamic> data) async {
           },
         )
         .toList();
+  }
+  if (path == '/health') {
+    return {
+      'capabilities': await MediaNative.capabilities(),
+      'capture': await MediaNative.captureStats(
+        stream!.getVideoTracks().first.id!,
+      ),
+      'adaptiveStep': adaptive.current.steps,
+    };
   }
   if (path == '/stop') {
     await stop();
@@ -156,6 +265,19 @@ Future<dynamic> command(String path, Map<String, dynamic> data) async {
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (Platform.environment['WEBDESK_MEDIA_NATIVE_LOGS'] == '1') {
+    FlutterWebRTCEventChannel.instance.handleEvents.stream.listen((event) {
+      final message = event['onLogData']?['data']?.toString() ?? '';
+      for (final line in message.split('\n')) {
+        if (RegExp(
+          r'^\([a-z0-9_]+\.(?:cc|h):\d+\): .*?(?:WebDesk|VESFW|InitEncode|Encoder info changed|ReconfigureEncoder)',
+        ).hasMatch(line)) {
+          stderr.writeln(line);
+        }
+      }
+    });
+    await WebRTC.initialize(options: {'logSeverity': 'info'});
+  }
   await windowManager.ensureInitialized();
   runApp(
     MaterialApp(
@@ -175,7 +297,16 @@ Future<void> main(List<String> args) async {
   await windowManager.setAlwaysOnTop(true);
   await windowManager.show();
   await windowManager.focus();
-  Timer.periodic(const Duration(milliseconds: 33), (_) => picture.value++);
+  // Keep the original 33 ms fixture for 30 FPS baseline comparisons. A
+  // separate 60 FPS fixture is required to validate the repaired integer FPS
+  // constraint; increasing capture FPS over a 30 FPS animation is insufficient.
+  final fixtureFps = int.tryParse(
+    Platform.environment['WEBDESK_MEDIA_FIXTURE_FPS'] ?? '',
+  );
+  final fixturePeriod = fixtureFps == null
+      ? const Duration(milliseconds: 33)
+      : Duration(microseconds: (1000000 / fixtureFps.clamp(1, 60)).round());
+  Timer.periodic(fixturePeriod, (_) => picture.value++);
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 44402);
   await for (final req in server) {
     try {

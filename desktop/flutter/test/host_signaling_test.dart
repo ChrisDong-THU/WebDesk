@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:webdesk/session/host_controller.dart';
+import 'package:webdesk/protocol/quality.dart';
+import 'package:webdesk/protocol/version.dart';
 import 'package:webdesk/session/host_preferences.dart';
 
 Future<void> waitUntil(bool Function() condition) async {
@@ -98,14 +100,10 @@ void main() {
       expect(restarted.password, isNot(oldPassword));
       final revoked = await observer
           .emitWithAckAsync('connect-host', {
+            'protocolVersion': sessionProtocolVersion,
             'deviceId': oldDevice,
             'password': oldPassword,
-            'quality': {
-              'resolutionRatio': 1080,
-              'maxFramerate': 30,
-              'maxBitrate': 0,
-              'videoContentHint': 'detail',
-            },
+            'quality': const Quality(height: 1080, fps: 30).toMap(),
           })
           .timeout(const Duration(seconds: 5));
       expect(revoked['error'], contains('设备离线或连接密码不正确'));

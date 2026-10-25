@@ -1,6 +1,6 @@
 name: Bug report / 问题反馈
 description: 报告可复现的问题
-title: "[Bug]: "
+title: '[Bug]: '
 body:
   - type: input
     id: version

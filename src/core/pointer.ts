@@ -1,5 +1,7 @@
-export type PointerSample = Pick<MouseEvent,
-  'target' | 'button' | 'buttons' | 'clientX' | 'clientY' | 'shiftKey' | 'ctrlKey' | 'altKey' | 'metaKey'>;
+export type PointerSample = Pick<
+  MouseEvent,
+  'target' | 'button' | 'buttons' | 'clientX' | 'clientY' | 'shiftKey' | 'ctrlKey' | 'altKey' | 'metaKey'
+>;
 
 /** Own a drag until its matching release, even outside the video element. */
 export function bindPointerInput(options: {
@@ -17,7 +19,11 @@ export function bindPointerInput(options: {
   const masks = [1, 4, 2]; // MouseEvent.button order: left, middle, right.
   let pending: PointerSample | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const clear = () => { clearTimeout(timer); timer = undefined; pending = undefined; };
+  const clear = () => {
+    clearTimeout(timer);
+    timer = undefined;
+    pending = undefined;
+  };
   const flush = () => {
     const event = pending;
     clear();
@@ -27,26 +33,46 @@ export function bindPointerInput(options: {
     if (timer !== undefined) return;
     timer = setTimeout(() => {
       timer = undefined;
-      if (!options.active()) { clear(); return; }
-      if (options.congested?.()) { schedule(); return; }
+      if (!options.active()) {
+        clear();
+        return;
+      }
+      if (options.congested?.()) {
+        schedule();
+        return;
+      }
       flush();
     }, 16);
   };
   const removers: Array<() => void> = [];
   const bind = <K extends keyof GlobalEventHandlersEventMap>(
-    target: EventTarget, type: K, callback: (event: GlobalEventHandlersEventMap[K]) => void,
+    target: EventTarget,
+    type: K,
+    callback: (event: GlobalEventHandlersEventMap[K]) => void,
   ) => {
     target.addEventListener(type, callback as EventListener, true);
     removers.push(() => target.removeEventListener(type, callback as EventListener, true));
   };
-  const reset = () => { pressed.clear(); clear(); };
-  const cancel = () => { const held = pressed.size > 0; reset(); if (held) options.cancel(); };
+  const reset = () => {
+    pressed.clear();
+    clear();
+  };
+  const cancel = () => {
+    const held = pressed.size > 0;
+    reset();
+    if (held) options.cancel();
+  };
   const relative = (event: MouseEvent, video: HTMLVideoElement): PointerSample => {
     const rect = video.getBoundingClientRect();
     // Keep the video origin when a drag event targets an element outside it.
     return {
-      target: video, button: event.button, buttons: event.buttons,
-      shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, altKey: event.altKey, metaKey: event.metaKey,
+      target: video,
+      button: event.button,
+      buttons: event.buttons,
+      shiftKey: event.shiftKey,
+      ctrlKey: event.ctrlKey,
+      altKey: event.altKey,
+      metaKey: event.metaKey,
       clientX: Math.max(rect.left, Math.min(rect.right, event.clientX)),
       clientY: Math.max(rect.top, Math.min(rect.bottom, event.clientY)),
     };
@@ -67,7 +93,7 @@ export function bindPointerInput(options: {
   bind(options.window, 'mousemove', (event: MouseEvent) => {
     const video = options.video();
     if (!options.active() || !video) return;
-    if ([...pressed].some(button => !(event.buttons & masks[button]))) cancel();
+    if ([...pressed].some((button) => !(event.buttons & masks[button]))) cancel();
     if (pressed.size || event.target === video) {
       pending = relative(event, video);
       schedule();
@@ -83,5 +109,12 @@ export function bindPointerInput(options: {
   bind(options.window, 'pointercancel', cancel);
   bind(options.window, 'blur', cancel);
   bind(options.area, 'focusout', cancel);
-  return { reset, flush, dispose: () => { reset(); removers.forEach(remove => remove()); } };
+  return {
+    reset,
+    flush,
+    dispose: () => {
+      reset();
+      removers.forEach((remove) => remove());
+    },
+  };
 }

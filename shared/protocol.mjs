@@ -1,3 +1,5 @@
+export const SESSION_PROTOCOL_VERSION = 1;
+
 export const RESOLUTION_OPTIONS = Object.freeze([
   { label: '360p', value: 360 },
   { label: '720p', value: 720 },
@@ -9,10 +11,33 @@ export const RESOLUTION_OPTIONS = Object.freeze([
 // Upstream remote/index.vue selects 60 FPS; remoteDesk.newWebRtc leaves the
 // bitrate override unset. 0 selects Auto; the native host sizes its ceiling to
 // output pixels/fps while WebRTC still controls the actual sending rate.
-export const DEFAULT_QUALITY = Object.freeze({ maxBitrate: 0, maxFramerate: 60, resolutionRatio: 4320, videoContentHint: 'detail' });
+export const DEGRADATION_OPTIONS = Object.freeze([
+  'auto',
+  'balanced',
+  'maintain-framerate',
+  'maintain-resolution',
+  'disabled',
+]);
+export const NETWORK_OPTIONS = Object.freeze(['auto', 'low-latency']);
+export const CODEC_OPTIONS = Object.freeze(['auto', 'H264', 'AV1', 'VP9', 'VP8']);
+export const DEFAULT_QUALITY = Object.freeze({
+  maxBitrate: 0,
+  maxFramerate: 60,
+  resolutionRatio: 4320,
+  videoContentHint: 'detail',
+  degradationPreference: 'auto',
+  networkMode: 'auto',
+  codecPreference: 'auto',
+});
 export function validQuality(value) {
-  return !!value && [0, 1000, 2000, 4000, 8000, 16000].includes(value.maxBitrate)
-    && [10, 20, 30, 60, 120].includes(value.maxFramerate)
-    && RESOLUTION_OPTIONS.some(option => option.value === value.resolutionRatio)
-    && ['', 'detail', 'text', 'motion'].includes(value.videoContentHint);
+  return (
+    !!value &&
+    [0, 1000, 2000, 4000, 8000, 16000].includes(value.maxBitrate) &&
+    [10, 20, 30, 60].includes(value.maxFramerate) &&
+    RESOLUTION_OPTIONS.some((option) => option.value === value.resolutionRatio) &&
+    ['', 'detail', 'text', 'motion'].includes(value.videoContentHint) &&
+    DEGRADATION_OPTIONS.includes(value.degradationPreference) &&
+    NETWORK_OPTIONS.includes(value.networkMode) &&
+    CODEC_OPTIONS.includes(value.codecPreference)
+  );
 }

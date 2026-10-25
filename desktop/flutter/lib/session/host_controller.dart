@@ -6,6 +6,7 @@ import 'package:socket_io_client/socket_io_client.dart' as io;
 
 import '../native/desktop_bridge.dart';
 import '../protocol/quality.dart';
+import '../protocol/version.dart';
 import 'host_preferences.dart';
 import 'remote_session.dart';
 
@@ -224,15 +225,30 @@ class HostController extends ChangeNotifier {
     });
     socket.emitWithAck(
       'register-host',
-      {'deviceId': device, 'password': password},
+      {
+        'deviceId': device,
+        'password': password,
+        'protocolVersion': sessionProtocolVersion,
+      },
       ack: (result) {
         if (generation != _generation) return;
         answered = true;
         _retry?.cancel();
+        if (result is! Map ||
+            result['code'] == 'PROTOCOL_MISMATCH' ||
+            (result['error'] == null &&
+                result['protocolVersion'] != sessionProtocolVersion)) {
+          unawaited(
+            disable().then((_) {
+              if (_disposed) return;
+              error = '客户端与服务端版本不一致，请同步更新';
+              notifyListeners();
+            }),
+          );
+          return;
+        }
         busy = false;
-        error = result is Map && result['error'] != null
-            ? result['error'].toString()
-            : '';
+        error = result['error'] != null ? result['error'].toString() : '';
         if (error.isNotEmpty) {
           _retry = Timer(
             const Duration(seconds: 5),

@@ -1,6 +1,6 @@
 # 自部署指南
 
-适用版本：0.5.9。以下方案使用 Linux、Node.js 22、systemd 和 Nginx；需要公网中继时配置 Coturn。网页、服务端和 Windows 客户端应同步更新，并连接同一服务地址。
+适用版本：0.6.0。以下方案使用 Linux、Node.js 22、systemd 和 Nginx；需要公网中继时配置 Coturn。网页、服务端和 Windows 客户端应同步更新，并连接同一服务地址。
 
 ## 构建与上传
 
@@ -72,12 +72,23 @@ sudo systemctl enable webdesk
 
 ## 发布与升级
 
+0.6.0 为同步协议升级，旧客户端不再兼容。升级会中断当前会话；部署新服务器后安装同版 Windows 客户端并强制刷新浏览器。新客户端在服务版本不一致时明确报错，不通过后台重连掩盖版本差异。
+
+已配置 Workbench CLI 时，可从项目根目录先暂存和校验，再正式激活：
+
+```powershell
+powershell -File scripts/deploy-workbench.ps1 -InstanceId i-你的实例 -ArchivePath server-release/实际归档.tar.gz
+powershell -File scripts/deploy-workbench.ps1 -InstanceId i-你的实例 -ArchivePath server-release/实际归档.tar.gz -Activate
+```
+
+脚本逐次检查上传路径和 SHA256，不覆盖不同内容、不打印 CLI 认证令牌。`-Activate` 切换发布并重启 `webdesk`；未指定时仅暂存。
+
 将下例归档路径替换为实际上传文件；同名 `.sha256` 文件应位于同一目录：
 
 ```sh
 archive=/tmp/webdesk-XXXXXX.tar.gz
 digest=$(awk '{print $1}' "$archive.sha256")
-sudo bash /tmp/activate-release.sh 0.5.9 "$archive" "$digest"
+sudo bash /tmp/activate-release.sh 0.6.0 "$archive" "$digest"
 ```
 
 脚本依次校验 SHA-256 和包版本、安装运行依赖、切换 `/opt/webdesk/current`、重启服务，并检查本机 `/health` 的状态和版本。脚本健康检查固定使用 `127.0.0.1:4300`，更改监听配置时需同步调整。
@@ -125,7 +136,7 @@ sudo systemctl status webdesk nginx
 sudo journalctl -u webdesk -n 100 --no-pager
 ```
 
-健康接口应返回 `status: "ok"` 和 `version: "0.5.9"`。启用 Coturn 时另查其服务状态。
+健康接口应返回 `status: "ok"` 和 `version: "0.6.0"`。启用 Coturn 时另查其服务状态。
 
 使用两台设备验证连接、键鼠、双向文件、文本剪贴板和声音；在无法直连的网络验证 TURN 中继，并检查实际连接路径。Windows 客户端的托盘、UAC、锁屏与恢复验收见[开发指南](development.md#发布验收)。
 

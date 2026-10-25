@@ -8,9 +8,10 @@ if (-not $SkipPrepare) { & (Join-Path $PSScriptRoot 'prepare-flutter.ps1') }
 $env:PUB_CACHE = Join-Path $root '.tools\pub-cache'
 $flutter = Join-Path $root '.tools\flutter\bin\flutter.bat'
 $app = Join-Path $root 'desktop\flutter'
-$versionMatch = [regex]::Match((Get-Content (Join-Path $app 'pubspec.yaml') -Raw), '(?m)^version:\s*([0-9.]+)')
+$versionMatch = [regex]::Match((Get-Content (Join-Path $app 'pubspec.yaml') -Raw), '(?m)^version:\s*(\d+\.\d+\.\d+)\+(\d+)\s*$')
 if (-not $versionMatch.Success) { throw 'Missing Flutter version' }
 $version = $versionMatch.Groups[1].Value
+$buildNumber = $versionMatch.Groups[2].Value
 Push-Location $root
 try {
   & node scripts/check-release.mjs
@@ -19,6 +20,8 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'Native build failed' }
   & powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-desktop-capture.ps1
   if ($LASTEXITCODE -ne 0) { throw 'Desktop capture regression failed' }
+  & powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-native-media.ps1
+  if ($LASTEXITCODE -ne 0) { throw 'Native media regression failed' }
   # Exercise caption input and the patched Windows dispatcher before packaging.
   & powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-flutter-task-runner.ps1
   if ($LASTEXITCODE -ne 0) { throw 'WebRTC task runner regression failed' }
@@ -31,6 +34,24 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'Flutter analysis failed' }
   & $flutter test
   if ($LASTEXITCODE -ne 0) { throw 'Flutter tests failed' }
+  & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'scripts\test-file-selection.ps1')
+  if ($LASTEXITCODE -ne 0) { throw 'Flutter file selection integration failed' }
+  # CMake's install pass does not remove libraries from deleted plugins. Build
+  # a fresh runner bundle so cached DLLs and old test assets cannot be shipped.
+  $bundleRoot = [IO.Path]::GetFullPath((Join-Path $app 'build'))
+  $runnerOutput = Join-Path $bundleRoot 'windows\x64\runner\Release'
+  if (Test-Path -LiteralPath $runnerOutput) {
+    $outputItem = Get-Item -LiteralPath $runnerOutput
+    if (-not $outputItem.PSIsContainer -or -not $outputItem.FullName.StartsWith($bundleRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
+      throw 'Unexpected runner output directory'
+    }
+    for ($ancestor = $outputItem; ; $ancestor = $ancestor.Parent) {
+      if ($ancestor.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Runner output cannot contain directory links' }
+      if ($ancestor.FullName -eq $bundleRoot) { break }
+      if (-not $ancestor.Parent) { throw 'Runner output escaped the build directory' }
+    }
+    Remove-Item -LiteralPath $outputItem.FullName -Recurse -Force
+  }
   # Always specify the production entrypoint. Integration drivers cannot leak
   # into a release after a prior test build.
   & $flutter build windows --release --target lib/main.dart
@@ -62,7 +83,7 @@ Copy-Item -LiteralPath (Join-Path $root 'third_party\licenses') -Destination (Jo
 if ($Installer) {
   $compiler = Join-Path $root '.tools\inno\ISCC.exe'
   if (-not (Test-Path -LiteralPath $compiler)) { throw 'Install Inno Setup 6.7.3 in .tools\inno first (see native/flutter/dependencies.json).' }
-  & $compiler "/DPayloadDir=$payload" "/DAppVersion=$version" (Join-Path $root 'build\inno\WebDesk.iss')
+  & $compiler "/DPayloadDir=$payload" "/DAppVersion=$version" "/DAppBuildNumber=$buildNumber" (Join-Path $root 'build\inno\WebDesk.iss')
   if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed' }
   $installerPath = Join-Path $releaseRoot "WebDesk-$version-win-x64.exe"
   $digest = (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -70,6 +91,6 @@ if ($Installer) {
     Set-Content -Encoding ascii -LiteralPath "$installerPath.sha256"
 }
 $files = @(Get-ChildItem -LiteralPath $payload -Recurse -File)
-@{ version=$version; payload=$payload; bytes=($files | Measure-Object Length -Sum).Sum; files=$files.Count; entrypoint='lib/main.dart' } |
-  ConvertTo-Json | Set-Content -Encoding utf8 (Join-Path $releaseRoot 'build.json')
+$buildMetadata = @{ version=$version; flutterVersion="$version+$buildNumber"; builtAt=[DateTime]::UtcNow.ToString('o'); payload=$payload; bytes=($files | Measure-Object Length -Sum).Sum; files=$files.Count; entrypoint='lib/main.dart' } | ConvertTo-Json
+[IO.File]::WriteAllText((Join-Path $releaseRoot 'build.json'), $buildMetadata + "`n", [Text.UTF8Encoding]::new($false))
 Write-Host "Production payload: $payload"

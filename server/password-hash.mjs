@@ -13,14 +13,19 @@ export function createPasswordHasher({ concurrency = 2, queueLimit = 16 } = {}) 
       error ? reject(error) : resolve(hash);
       next();
     };
-    try { scrypt(password, salt, 32, complete); }
-    catch (error) { complete(error); }
-  }
-  return (password, salt) => new Promise((resolve, reject) => {
-    if (active >= concurrency && waiting.length >= queueLimit) {
-      reject(Error('认证请求繁忙，请稍后重试')); return;
+    try {
+      scrypt(password, salt, 32, complete);
+    } catch (error) {
+      complete(error);
     }
-    waiting.push({ password, salt, resolve, reject });
-    next();
-  });
+  }
+  return (password, salt) =>
+    new Promise((resolve, reject) => {
+      if (active >= concurrency && waiting.length >= queueLimit) {
+        reject(Error('认证请求繁忙，请稍后重试'));
+        return;
+      }
+      waiting.push({ password, salt, resolve, reject });
+      next();
+    });
 }

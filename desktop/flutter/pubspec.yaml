@@ -1,7 +1,7 @@
 name: webdesk
 description: WebDesk Windows host for the existing browser controller.
 publish_to: none
-version: 0.5.9+10
+version: 0.6.1+14
 environment:
   sdk: '>=3.8.0 <4.0.0'
 dependencies:
@@ -15,7 +15,7 @@ dependencies:
     path: ../../third_party/tray_manager
   path_provider: ^2.1.5
   path: ^1.9.1
-  file_selector: ^1.0.4
+  cross_file: 0.3.5+5
   flutter_svg: ^2.2.1
 dev_dependencies:
   flutter_test:

@@ -8,8 +8,9 @@
 
 #include <memory>
 
-#include "win32_window.h"
+#include "file_selection.h"
 #include "remote_caption_buttons.h"
+#include "win32_window.h"
 
 // A window that does nothing but host a Flutter view.
 class FlutterWindow : public Win32Window {
@@ -29,10 +30,12 @@ class FlutterWindow : public Win32Window {
   // The project to run.
   flutter::DartProject project_;
   RemoteCaptionButtons remote_caption_buttons_;
-
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> lifecycle_;
+  // Created with the engine, after Win32Window::Create's initial cleanup.
+  // Declared last so pending replies are revoked before engine destruction.
+  std::unique_ptr<FileSelection> file_selection_;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

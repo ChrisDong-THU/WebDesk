@@ -1,0 +1,750 @@
+diff --git a/include/rtc_desktop_capturer.h b/include/rtc_desktop_capturer.h
+--- a/include/rtc_desktop_capturer.h
++++ b/include/rtc_desktop_capturer.h
+@@ -27,6 +27,35 @@
+    * @brief Enumeration for the possible states of desktop capture.
+    */
+   enum CaptureState { CS_RUNNING, CS_STOPPED, CS_FAILED };
++  // kAuto in active_backend means unknown until an identified frame arrives.
++  enum class Backend { kAuto = 0, kDxgi = 1, kWgc = 2, kGdi = 3 };
++  enum class FallbackReason {
++    kNone = 0, kBackendUnavailable = 1, kCaptureErrors = 2,
++    kCreateFailed = 3, kCooldownProbe = 4, kNativeFallback = 5
++  };
++  struct CapturePolicy {
++    Backend backend = Backend::kAuto;
++    uint32_t max_width = 0;
++    uint32_t max_height = 0;
++  };
++  struct CaptureHealth {
++    Backend requested_backend = Backend::kAuto;
++    Backend active_backend = Backend::kAuto;
++    FallbackReason fallback_reason = FallbackReason::kNone;
++    uint64_t frames_captured = 0, frames_delivered = 0, frames_dropped = 0;
++    uint64_t capture_errors = 0, rebuilds = 0, backend_switches = 0;
++    uint32_t consecutive_errors = 0;
++    int64_t last_frame_age_ms = -1;
++    int64_t capture_time_us = 0, convert_time_us = 0;
++    int source_width = 0, source_height = 0;
++    int output_width = 0, output_height = 0;
++    bool recovering = false;
++  };
++  // Configure before Start. Unsupported WGC degrades to Auto with an explicit
++  // health reason. No implicit WGC opt-in is performed.
++  virtual bool SetCapturePolicy(const CapturePolicy& policy) = 0;
++  // A short synchronized snapshot; no native pixels, handles or IDs escape.
++  virtual CaptureHealth GetCaptureHealth() = 0;
+ 
+  public:
+   /**
+diff --git a/include/rtc_video_frame.h b/include/rtc_video_frame.h
+--- a/include/rtc_video_frame.h
++++ b/include/rtc_video_frame.h
+@@ -23,6 +23,12 @@
+   LIB_WEBRTC_API static scoped_refptr<RTCVideoFrame> Create(
+       int width, int height, const uint8_t* data_y, int stride_y,
+       const uint8_t* data_u, int stride_u, const uint8_t* data_v, int stride_v);
++
++  // BGRA bytes on little-endian hosts, positive stride, BT.601 limited I420.
++  // A four-slot per-calling-thread pool bounds retained frames across resize.
++  // Returns null on invalid input or overload; the input is never retained.
++  LIB_WEBRTC_API static scoped_refptr<RTCVideoFrame> CreateFromBgra(
++      int width, int height, const uint8_t* bgra, int stride, int length);
+ 
+   virtual scoped_refptr<RTCVideoFrame> Copy() = 0;
+ 
+diff --git a/src/rtc_desktop_capturer_impl.h b/src/rtc_desktop_capturer_impl.h
+--- a/src/rtc_desktop_capturer_impl.h
++++ b/src/rtc_desktop_capturer_impl.h
+@@ -17,7 +17,11 @@
+ #ifndef LIBWEBRTC_RTC_DESKTOP_CAPTURER_IMPL_HXX
+ #define LIBWEBRTC_RTC_DESKTOP_CAPTURER_IMPL_HXX
+ 
+-#include "common_video/include/video_frame_buffer_pool.h"
++#include <atomic>
++#include <mutex>
++#include <vector>
++#include "src/internal/bounded_i420_pool.h"
++#include "src/internal/desktop_capture_policy.h"
+ #include "api/video/video_frame.h"
+ #include "include/rtc_desktop_capturer.h"
+ #include "include/rtc_types.h"
+@@ -52,6 +56,8 @@
+   CaptureState Start(uint32_t fps, uint32_t x, uint32_t y, uint32_t w,
+                      uint32_t h) override;
+ 
++  bool SetCapturePolicy(const CapturePolicy& policy) override;
++  CaptureHealth GetCaptureHealth() override;
+   void Stop() override;
+ 
+   bool IsRunning() override;
+@@ -64,19 +70,31 @@
+       std::unique_ptr<webrtc::DesktopFrame> frame) override;
+ 
+  private:
+-  void CaptureFrame();
++  void CaptureFrame(uint64_t generation);
++  CaptureState StartOnCaptureThread(uint32_t fps);
++  bool BuildCapturer(Backend backend);
++  void RecordCaptureError(bool permanent);
++  void RecordDrop();
++  CapturePolicy policy_;
++  Backend preferred_backend_ = Backend::kAuto;
++  Backend last_identified_backend_ = Backend::kAuto;
++  bool show_cursor_ = true;
++  capture_policy::Recovery recovery_;
++  std::mutex health_mutex_;
++  CaptureHealth health_;
++  int64_t last_frame_ms_ = -1;
++  int64_t last_preconvert_us_ = 0;
++  std::vector<uint8_t> scaled_argb_;
++  std::atomic<uint64_t> capture_generation_{0};
+   webrtc::DesktopCaptureOptions options_;
+   std::unique_ptr<webrtc::DesktopCapturer> capturer_;
+   std::unique_ptr<webrtc::Thread> thread_;
+-  webrtc::VideoFrameBufferPool buffer_pool_{false, 4};
+-  CaptureState capture_state_ = CS_STOPPED;
++  BoundedI420Pool buffer_pool_;
++  std::atomic<CaptureState> capture_state_{CS_STOPPED};
+   DesktopType type_;
+   webrtc::DesktopCapturer::SourceId source_id_;
+   DesktopCapturerObserver* observer_ = nullptr;
+   uint32_t capture_delay_ = 1000;  // 1s
+-  webrtc::DesktopCapturer::Result result_ =
+-      webrtc::DesktopCapturer::Result::SUCCESS;
+-  webrtc::Thread* signaling_thread_ = nullptr;
+   scoped_refptr<MediaSource> source_;
+   uint32_t x_ = 0;
+   uint32_t y_ = 0;
+diff --git a/src/rtc_desktop_capturer_impl.cc b/src/rtc_desktop_capturer_impl.cc
+--- a/src/rtc_desktop_capturer_impl.cc
++++ b/src/rtc_desktop_capturer_impl.cc
+@@ -18,205 +18,302 @@
+ 
+ #include <algorithm>
+ #include <cstddef>
++#include <cmath>
+ #include "api/sequence_checker.h"
++#include "modules/desktop_capture/desktop_capture_types.h"
+ #include "rtc_base/checks.h"
+ #include "third_party/libyuv/include/libyuv.h"
+ #ifdef WEBRTC_WIN
+-#include "modules/desktop_capture/win/window_capture_utils.h"
++#include <windows.h>
++#endif
++#if defined(RTC_ENABLE_WIN_WGC)
++#include "modules/desktop_capture/win/wgc_capturer_win.h"
+ #endif
+ 
+ namespace libwebrtc {
+-
+-enum { kCaptureDelay = 33, kCaptureMessageId = 1000 };
++#ifdef WEBRTC_WIN
++// Shared with rtc_desktop_media_list_impl.cc's guarded thumbnail capture.
++int filterException(int code, PEXCEPTION_POINTERS exception) {
++  return EXCEPTION_EXECUTE_HANDLER;
++}
++#endif
++namespace {
++RTCDesktopCapturer::Backend FrameBackend(uint32_t id) {
++  using B = RTCDesktopCapturer::Backend;
++  switch (id) {
++    case webrtc::DesktopCapturerId::kScreenCapturerWinDirectx: return B::kDxgi;
++    case webrtc::DesktopCapturerId::kWgcCapturerWin: return B::kWgc;
++    case webrtc::DesktopCapturerId::kScreenCapturerWinGdi:
++    case webrtc::DesktopCapturerId::kWindowCapturerWinGdi: return B::kGdi;
++    default: return B::kAuto;
++  }
++}
++}
+ 
+ RTCDesktopCapturerImpl::RTCDesktopCapturerImpl(
+     DesktopType type, webrtc::DesktopCapturer::SourceId source_id,
+     webrtc::Thread* signaling_thread, scoped_refptr<MediaSource> source,
+     bool showCursor)
+-    : thread_(webrtc::Thread::Create()),
+-      source_id_(source_id),
+-      signaling_thread_(signaling_thread),
+-      source_(source) {
++    : show_cursor_(showCursor), thread_(webrtc::Thread::Create()), type_(type),
++      source_id_(source_id), source_(source) {
+   RTC_DCHECK(thread_);
+-  type_ = type;
+   thread_->Start();
++  recovery_.Reset(0);
++}
++
++RTCDesktopCapturerImpl::~RTCDesktopCapturerImpl() {
++  capture_state_ = CS_STOPPED;
++  ++capture_generation_;
++  // WGC/DXGI resources are created, driven and released on the capture thread.
++  thread_->BlockingCall([this] { capturer_.reset(); });
++  thread_->Stop();
++}
++
++bool RTCDesktopCapturerImpl::SetCapturePolicy(const CapturePolicy& policy) {
++  if (policy.max_width > 32768 || policy.max_height > 32768 ||
++      policy.max_width == 1 || policy.max_height == 1 ||
++      static_cast<int>(policy.backend) < 0 || static_cast<int>(policy.backend) > 3)
++    return false;
++  return thread_->BlockingCall([this, policy] {
++    if (capture_state_ == CS_RUNNING) return false;
++    policy_ = policy;
++    preferred_backend_ = policy.backend;
++    bool supported = true;
++#ifdef WEBRTC_WIN
++    if (policy.backend == Backend::kWgc) {
++#if defined(RTC_ENABLE_WIN_WGC)
++      supported = webrtc::IsWgcSupported(type_ == kScreen ?
++          webrtc::CaptureType::kScreen : webrtc::CaptureType::kWindow);
++#else
++      supported = false;
++#endif
++    }
++    // Desktop duplication does not capture individual windows.
++    if (type_ != kScreen && policy.backend == Backend::kDxgi) supported = false;
++#else
++    supported = policy.backend == Backend::kAuto;
++#endif
++    if (!supported) preferred_backend_ = Backend::kAuto;
++    recovery_.Reset(static_cast<int>(preferred_backend_));
++    std::lock_guard<std::mutex> lock(health_mutex_);
++    health_.requested_backend = policy.backend;
++    health_.fallback_reason = supported ? FallbackReason::kNone :
++                                        FallbackReason::kBackendUnavailable;
++    return true;
++  });
++}
++
++RTCDesktopCapturer::CaptureHealth RTCDesktopCapturerImpl::GetCaptureHealth() {
++  std::lock_guard<std::mutex> lock(health_mutex_);
++  auto health = health_;
++  health.last_frame_age_ms = last_frame_ms_ < 0 ? -1 :
++      std::max<int64_t>(0, webrtc::TimeMillis() - last_frame_ms_);
++  return health;
++}
++
++bool RTCDesktopCapturerImpl::BuildCapturer(Backend backend) {
++  RTC_DCHECK_RUN_ON(thread_.get());
++  capturer_.reset();
+   options_ = webrtc::DesktopCaptureOptions::CreateDefault();
+   options_.set_detect_updated_region(true);
+ #ifdef WEBRTC_WIN
+-  options_.set_allow_directx_capturer(true);
++  options_.set_allow_directx_capturer(type_ == kScreen && backend != Backend::kGdi);
++#if defined(RTC_ENABLE_WIN_WGC)
++  options_.set_allow_wgc_screen_capturer(backend == Backend::kWgc && type_ == kScreen);
++  options_.set_allow_wgc_window_capturer(backend == Backend::kWgc && type_ != kScreen);
++  options_.set_allow_wgc_capturer_fallback(false);
++  options_.set_allow_wgc_using_texture(false); // CPU path; never reinterpret native data().
++#endif
+ #endif
+ #ifdef WEBRTC_LINUX
+-  if (type == kScreen) {
+-    options_.set_allow_pipewire(true);
+-  }
+-#endif
+-  thread_->BlockingCall([this, type, showCursor] {
+-    if (type == kScreen) {
+-      if (showCursor) {
+-        capturer_ = std::make_unique<webrtc::DesktopAndCursorComposer>(
+-            webrtc::DesktopCapturer::CreateScreenCapturer(options_), options_);
+-      } else {
+-        capturer_ = webrtc::DesktopAndCursorComposer::CreateWithoutMouseCursorMonitor(
+-                webrtc::DesktopCapturer::CreateScreenCapturer(options_));
+-      }
+-    } else {
+-      capturer_ = std::make_unique<webrtc::DesktopAndCursorComposer>(
+-          webrtc::DesktopCapturer::CreateWindowCapturer(options_), options_);
+-    }
++  if (type_ == kScreen) options_.set_allow_pipewire(true);
++#endif
++  auto raw = type_ == kScreen ? webrtc::DesktopCapturer::CreateScreenCapturer(options_) :
++                               webrtc::DesktopCapturer::CreateWindowCapturer(options_);
++  if (!raw) return false;
++  // Reuse the engine's screen ID translation, rather than assuming an ID is
++  // HMONITOR or enumerating a different screen on recovery.
++  if (source_id_ != -1 && !raw->SelectSource(source_id_)) return false;
++  if (type_ == kWindow && source_id_ != -1 && !raw->FocusOnSelectedSource()) return false;
++  if (show_cursor_ || type_ != kScreen) {
++    capturer_ = std::make_unique<webrtc::DesktopAndCursorComposer>(std::move(raw), options_);
++  } else {
++    capturer_ = webrtc::DesktopAndCursorComposer::CreateWithoutMouseCursorMonitor(std::move(raw));
++  }
++  capturer_->Start(this);
++  std::lock_guard<std::mutex> lock(health_mutex_);
++  health_.active_backend = Backend::kAuto; // Unknown until identified frame.
++  return true;
++}
++
++RTCDesktopCapturer::CaptureState RTCDesktopCapturerImpl::Start(
++    uint32_t fps, uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
++  return thread_->BlockingCall([this, fps, x, y, w, h] {
++    if (capture_state_ == CS_RUNNING) return CS_RUNNING;
++    if (x > 32768 || y > 32768 || w > 32768 || h > 32768) return CS_FAILED;
++    x_ = w && h ? x : 0; y_ = w && h ? y : 0; w_ = w; h_ = h;
++    return StartOnCaptureThread(fps);
+   });
+ }
+ 
+-RTCDesktopCapturerImpl::~RTCDesktopCapturerImpl() {
+-  thread_->Stop();
+-  capturer_.reset();
+-}
+-
+-RTCDesktopCapturerImpl::CaptureState RTCDesktopCapturerImpl::Start(
+-    uint32_t fps, uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
+-  x_ = x;
+-  y_ = y;
+-  w_ = w;
+-  h_ = h;
+-  if (!w_ || !h) {
+-    x_ = 0;
+-    y_ = 0;
+-  }
+-  return Start(fps);
+-}
+-
+-RTCDesktopCapturerImpl::CaptureState RTCDesktopCapturerImpl::Start(
+-    uint32_t fps) {
+-  if (capture_state_ == CS_RUNNING) {
+-    return capture_state_;
+-  }
+-
+-  if (fps == 0) {
+-    capture_state_ = CS_FAILED;
+-    return capture_state_;
+-  }
+-
+-  if (fps >= 60) {
+-    capture_delay_ = uint32_t(1000.0 / 60.0);
+-  } else {
+-    capture_delay_ = uint32_t(1000.0 / fps);
+-  }
+-
+-  if (source_id_ != -1) {
+-    if (!capturer_->SelectSource(source_id_)) {
+-      capture_state_ = CS_FAILED;
+-      return capture_state_;
+-    }
+-    if (type_ == kWindow) {
+-      if (!capturer_->FocusOnSelectedSource()) {
+-        capture_state_ = CS_FAILED;
+-        return capture_state_;
+-      }
+-    }
+-  }
+-
+-  thread_->BlockingCall([this] { capturer_->Start(this); });
++RTCDesktopCapturer::CaptureState RTCDesktopCapturerImpl::Start(uint32_t fps) {
++  return thread_->BlockingCall([this, fps] { return StartOnCaptureThread(fps); });
++}
++
++RTCDesktopCapturer::CaptureState RTCDesktopCapturerImpl::StartOnCaptureThread(uint32_t fps) {
++  if (capture_state_ == CS_RUNNING) return CS_RUNNING;
++  if (!fps) { capture_state_ = CS_FAILED; return CS_FAILED; }
++  capture_delay_ = 1000 / std::min<uint32_t>(60, fps);
++  recovery_.Reset(static_cast<int>(preferred_backend_));
++  last_preconvert_us_ = 0;
++  bool created = BuildCapturer(preferred_backend_);
++  if (!created) {
++    std::lock_guard<std::mutex> lock(health_mutex_);
++    health_.fallback_reason = FallbackReason::kCreateFailed;
++    ++health_.capture_errors;
++  }
++  // Keep a failed source alive in a bounded retry loop: lock/unlock, display
++  // changes and transient desktop denial do not permanently kill the track.
++  recovery_.Rebuilt(webrtc::TimeMillis(), created, static_cast<int>(preferred_backend_));
+   capture_state_ = CS_RUNNING;
+-  thread_->PostTask([this] { CaptureFrame(); });
+-  if (observer_) {
+-    signaling_thread_->BlockingCall([&, this]() { observer_->OnStart(this); });
+-  }
+-  return capture_state_;
++  const uint64_t generation = ++capture_generation_;
++  thread_->PostTask([this, generation] { CaptureFrame(generation); });
++  return CS_RUNNING;
+ }
+ 
+ void RTCDesktopCapturerImpl::Stop() {
+-  if (observer_) {
+-    if (!signaling_thread_->IsCurrent()) {
+-      signaling_thread_->BlockingCall([&, this]() { observer_->OnStop(this); });
+-    } else {
+-      observer_->OnStop(this);
+-    }
+-  }
+   capture_state_ = CS_STOPPED;
+-}
+-
+-bool RTCDesktopCapturerImpl::IsRunning() {
+-  return capture_state_ == CS_RUNNING;
+-}
+-
+-#ifdef WEBRTC_WIN
+-int filterException(int code, PEXCEPTION_POINTERS ex) {
+-  return EXCEPTION_EXECUTE_HANDLER;
+-}
+-#endif
++  ++capture_generation_;
++  // No synchronous signaling call: source destruction may already be on the
++  // signaling thread, while a native capture is finishing on the worker.
++}
++
++bool RTCDesktopCapturerImpl::IsRunning() { return capture_state_ == CS_RUNNING; }
++
++void RTCDesktopCapturerImpl::RecordDrop() {
++  std::lock_guard<std::mutex> lock(health_mutex_);
++  ++health_.frames_dropped;
++}
++
++void RTCDesktopCapturerImpl::RecordCaptureError(bool permanent) {
++  recovery_.Failure(webrtc::TimeMillis(), permanent);
++  std::lock_guard<std::mutex> lock(health_mutex_);
++  ++health_.capture_errors;
++  health_.consecutive_errors = recovery_.errors();
++  health_.recovering = recovery_.recovering();
++  if (health_.recovering) health_.fallback_reason = FallbackReason::kCaptureErrors;
++}
+ 
+ void RTCDesktopCapturerImpl::OnCaptureResult(
+     webrtc::DesktopCapturer::Result result,
+     std::unique_ptr<webrtc::DesktopFrame> frame) {
+-  if (result != result_) {
+-    if (result == webrtc::DesktopCapturer::Result::ERROR_PERMANENT) {
+-      if (observer_) {
+-        signaling_thread_->BlockingCall(
+-            [&, this]() { observer_->OnError(this); });
+-      }
+-      capture_state_ = CS_FAILED;
+-      return;
+-    }
+-
+-    if (result == webrtc::DesktopCapturer::Result::ERROR_TEMPORARY) {
+-      result_ = result;
+-      if (observer_) {
+-        signaling_thread_->BlockingCall(
+-            [&, this]() { observer_->OnPaused(this); });
+-      }
+-      return;
+-    }
+-
+-    if (result == webrtc::DesktopCapturer::Result::SUCCESS) {
+-      result_ = result;
+-      if (observer_) {
+-        signaling_thread_->BlockingCall(
+-            [&, this]() { observer_->OnStart(this); });
+-      }
+-    }
+-  }
+-
+-  if (result == webrtc::DesktopCapturer::Result::ERROR_TEMPORARY) {
++  if (result != webrtc::DesktopCapturer::Result::SUCCESS || !frame) {
++    RecordCaptureError(result == webrtc::DesktopCapturer::Result::ERROR_PERMANENT);
+     return;
+   }
+-
+-  if (result != webrtc::DesktopCapturer::Result::SUCCESS || !frame) return;
+-  const int source_width = frame->size().width();
+-  const int source_height = frame->size().height();
++  const int64_t started_us = webrtc::TimeMicros();
++  const Backend actual = FrameBackend(frame->capturer_id());
++  recovery_.Frame(webrtc::TimeMillis(), static_cast<int>(actual));
++  {
++    std::lock_guard<std::mutex> lock(health_mutex_);
++    ++health_.frames_captured;
++    if (last_identified_backend_ != Backend::kAuto && actual != Backend::kAuto &&
++        last_identified_backend_ != actual) ++health_.backend_switches;
++    if (actual != Backend::kAuto) last_identified_backend_ = actual;
++    health_.active_backend = actual;
++    health_.source_width = frame->size().width();
++    health_.source_height = frame->size().height();
++    health_.consecutive_errors = 0;
++    health_.recovering = recovery_.recovering();
++    if (health_.recovering && actual == Backend::kGdi &&
++        health_.fallback_reason == FallbackReason::kNone)
++      health_.fallback_reason = FallbackReason::kNativeFallback;
++    if (!health_.recovering && health_.fallback_reason != FallbackReason::kBackendUnavailable)
++      health_.fallback_reason = FallbackReason::kNone;
++  }
++  const int source_width = frame->size().width(), source_height = frame->size().height();
+   const int width = w_ > 0 ? static_cast<int>(w_) : source_width;
+   const int height = h_ > 0 ? static_cast<int>(h_) : source_height;
+-  if (width <= 0 || height <= 0 || x_ > static_cast<uint32_t>(source_width) ||
+-      y_ > static_cast<uint32_t>(source_height) ||
+-      width > source_width - static_cast<int>(x_) ||
+-      height > source_height - static_cast<int>(y_)) return;
+-
+-  // A delivered frame is retained by asynchronous encoders. Never overwrite it.
+-  // A bounded pool reuses only unreferenced frames; overload drops capture rather
+-  // than allocating an unbounded encoder backlog.
+-  auto buffer = buffer_pool_.CreateI420Buffer(width, height);
+-  if (!buffer) return;
+-  const auto* pixels = frame->data() + static_cast<std::ptrdiff_t>(y_) * frame->stride() +
+-                       static_cast<std::ptrdiff_t>(x_) * 4;
+-  if (libyuv::ARGBToI420(pixels, frame->stride(),
+-                        buffer->MutableDataY(), buffer->StrideY(),
+-                        buffer->MutableDataU(), buffer->StrideU(),
+-                        buffer->MutableDataV(), buffer->StrideV(), width, height) != 0) return;
+-  OnFrame(webrtc::VideoFrame::Builder()
+-              .set_video_frame_buffer(buffer)
+-              .set_timestamp_us(webrtc::TimeMicros())
+-              .set_rotation(webrtc::kVideoRotation_0)
+-              .build());
+-}
+-
+-void RTCDesktopCapturerImpl::CaptureFrame() {
++  int output_width = 0, output_height = 0;
++  if (source_width <= 0 || source_height <= 0 || source_width > 32768 ||
++      source_height > 32768 || !frame->data() || frame->stride() < source_width * 4 ||
++      x_ > static_cast<uint32_t>(source_width) || y_ > static_cast<uint32_t>(source_height) ||
++      width > source_width - static_cast<int>(x_) || height > source_height - static_cast<int>(y_) ||
++      !capture_policy::Fit(width, height, policy_.max_width, policy_.max_height,
++                           &output_width, &output_height)) { RecordDrop(); return; }
++  {
++    std::lock_guard<std::mutex> lock(health_mutex_);
++    last_frame_ms_ = webrtc::TimeMillis(); // Source health survives downstream backpressure.
++  }
++  // Respect downstream fps and pixel ceilings before any BGRA scale/convert.
++  // OnFrame still owns the exact VideoAdapter decision; calling it twice with
++  // the same timestamp would consume its fps budget and drop valid frames.
++  const auto wants = GetSinkWants();
++  if (wants.max_framerate_fps <= 0 || wants.max_pixel_count <= 0 ||
++      (last_preconvert_us_ > 0 && started_us - last_preconvert_us_ <
++       1000000 / wants.max_framerate_fps)) { RecordDrop(); return; }
++  const int64_t pixels_wanted = wants.max_pixel_count;
++  if (int64_t{output_width} * output_height > pixels_wanted) {
++    const double ratio = std::sqrt(static_cast<double>(pixels_wanted) /
++                                  (int64_t{output_width} * output_height));
++    output_width = static_cast<int>(output_width * ratio) & ~1;
++    output_height = static_cast<int>(output_height * ratio) & ~1;
++    if (output_width < 2 || output_height < 2) { RecordDrop(); return; }
++  }
++  last_preconvert_us_ = started_us;
++  auto buffer = buffer_pool_.Get(output_width, output_height);
++  if (!buffer) { RecordDrop(); return; }
++  const uint8_t* pixels = frame->data() + static_cast<std::ptrdiff_t>(y_) * frame->stride() +
++                          static_cast<std::ptrdiff_t>(x_) * 4;
++  int stride = frame->stride();
++  if (output_width != width || output_height != height) {
++    // Downsample BGRA first: avoid converting every 4K input pixel into three
++    // I420 planes only to discard most of them in VideoAdapter afterwards.
++    scaled_argb_.resize(static_cast<size_t>(output_width) * output_height * 4);
++    if (libyuv::ARGBScale(pixels, stride, width, height, scaled_argb_.data(),
++          output_width * 4, output_width, output_height, libyuv::kFilterBilinear) != 0) {
++      RecordDrop(); return;
++    }
++    pixels = scaled_argb_.data(); stride = output_width * 4;
++  }
++  if (libyuv::ARGBToI420(pixels, stride, buffer->MutableDataY(), buffer->StrideY(),
++      buffer->MutableDataU(), buffer->StrideU(), buffer->MutableDataV(), buffer->StrideV(),
++      output_width, output_height) != 0) { RecordDrop(); return; }
++  {
++    std::lock_guard<std::mutex> lock(health_mutex_);
++    ++health_.frames_delivered;
++    health_.output_width = output_width; health_.output_height = output_height;
++    health_.convert_time_us = webrtc::TimeMicros() - started_us;
++    last_frame_ms_ = webrtc::TimeMillis();
++  }
++  OnFrame(webrtc::VideoFrame::Builder().set_video_frame_buffer(buffer)
++      .set_timestamp_us(webrtc::TimeMicros()).set_rotation(webrtc::kVideoRotation_0).build());
++}
++
++void RTCDesktopCapturerImpl::CaptureFrame(uint64_t generation) {
+   RTC_DCHECK_RUN_ON(thread_.get());
+-  if (capture_state_ == CS_RUNNING) {
+-    const int64_t started = webrtc::TimeMillis();
+-    capturer_->CaptureFrame();
+-    thread_->PostDelayedHighPrecisionTask(
+-        [this]() { CaptureFrame(); },
+-        webrtc::TimeDelta::Millis(std::max<int64_t>(
+-            1, capture_delay_ - (webrtc::TimeMillis() - started))));
+-  }
++  if (capture_state_ != CS_RUNNING || generation != capture_generation_) return;
++  const int64_t started_us = webrtc::TimeMicros();
++  if (recovery_.Due(webrtc::TimeMillis())) {
++    const Backend backend = static_cast<Backend>(recovery_.NextBackend());
++    const bool success = BuildCapturer(backend);
++    recovery_.Rebuilt(webrtc::TimeMillis(), success, static_cast<int>(backend));
++    std::lock_guard<std::mutex> lock(health_mutex_);
++    ++health_.rebuilds;
++    health_.recovering = recovery_.recovering();
++    if (!success) { ++health_.capture_errors; health_.fallback_reason = FallbackReason::kCreateFailed; }
++    else if (backend != Backend::kGdi) health_.fallback_reason = FallbackReason::kCooldownProbe;
++  }
++  if (capturer_) capturer_->CaptureFrame();
++  const int64_t elapsed_us = webrtc::TimeMicros() - started_us;
++  {
++    std::lock_guard<std::mutex> lock(health_mutex_);
++    health_.capture_time_us = elapsed_us;
++    health_.recovering = recovery_.recovering();
++  }
++  if (capture_state_ != CS_RUNNING || generation != capture_generation_) return;
++  thread_->PostDelayedHighPrecisionTask([this, generation] { CaptureFrame(generation); },
++      webrtc::TimeDelta::Millis(std::max<int64_t>(1, capture_delay_ - elapsed_us / 1000)));
+ }
+ 
+ }  // namespace libwebrtc
+diff --git a/src/rtc_video_frame_impl.cc b/src/rtc_video_frame_impl.cc
+--- a/src/rtc_video_frame_impl.cc
++++ b/src/rtc_video_frame_impl.cc
+@@ -3,6 +3,8 @@
+ #include "api/video/i420_buffer.h"
+ #include "libyuv/convert_argb.h"
+ #include "libyuv/convert_from.h"
++#include "libyuv/convert.h"
++#include "src/internal/bounded_i420_pool.h"
+ #include "rtc_base/checks.h"
+ #include "rtc_base/logging.h"
+ 
+@@ -148,4 +150,21 @@
+   return frame;
+ }
+ 
++scoped_refptr<RTCVideoFrame> RTCVideoFrame::CreateFromBgra(
++    int width, int height, const uint8_t* bgra, int stride, int length) {
++  if (!bgra || width < 2 || height < 2 || (width & 1) || (height & 1) ||
++      width > 32768 || height > 32768 || int64_t{width} * height > 40000000 ||
++      stride < width * 4 || length < 0 ||
++      int64_t{stride} * (height - 1) + int64_t{width} * 4 > length)
++    return nullptr;
++  thread_local BoundedI420Pool pool;
++  auto buffer = pool.Get(width, height);
++  if (!buffer || libyuv::ARGBToI420(
++      bgra, stride, buffer->MutableDataY(), buffer->StrideY(),
++      buffer->MutableDataU(), buffer->StrideU(), buffer->MutableDataV(),
++      buffer->StrideV(), width, height) != 0) return nullptr;
++  return scoped_refptr<RTCVideoFrame>(
++      new RefCountedObject<VideoFrameBufferImpl>(buffer));
++}
++
+ }  // namespace libwebrtc
+diff --git a/src/internal/desktop_capture_policy.h b/src/internal/desktop_capture_policy.h
+new file mode 100644
+--- /dev/null
++++ b/src/internal/desktop_capture_policy.h
+@@ -0,0 +1,86 @@
++#ifndef LIBWEBRTC_INTERNAL_DESKTOP_CAPTURE_POLICY_H_
++#define LIBWEBRTC_INTERNAL_DESKTOP_CAPTURE_POLICY_H_
++
++#include <algorithm>
++#include <cstdint>
++
++namespace libwebrtc {
++namespace capture_policy {
++
++// Backend numbers match RTCDesktopCapturer::Backend. No OS APIs or clock are
++// hidden here: fault recovery and fitting can be tested deterministically.
++class Recovery {
++ public:
++  void Reset(int preferred) { *this = Recovery(); preferred_ = preferred; }
++  void Failure(int64_t now_ms, bool permanent) {
++    if (errors_ < 1000000) ++errors_;
++    if ((permanent || errors_ >= 8) && !pending_) {
++      pending_ = true;
++      next_backend_ = 3;  // Restore delivery with GDI before probing hardware.
++      due_ms_ = std::max(now_ms + 1000, last_rebuild_ms_ + 1000);
++    }
++  }
++  void Frame(int64_t now_ms, int actual) {
++    errors_ = 0;
++    if (actual == 1 || actual == 2 || preferred_ == 3) {
++      degraded_ = pending_ = false;
++      retry_count_ = 0;
++    } else if (actual == 3 && preferred_ != 3) {
++      if (!degraded_ || pending_) due_ms_ = now_ms + 30000;
++      degraded_ = true;
++      pending_ = false;
++      next_backend_ = preferred_;
++    }
++  }
++  bool Due(int64_t now_ms) const {
++    return (pending_ || degraded_) && now_ms >= due_ms_;
++  }
++  int NextBackend() const { return next_backend_; }
++  void Rebuilt(int64_t now_ms, bool success, int backend) {
++    last_rebuild_ms_ = now_ms;
++    errors_ = 0;
++    pending_ = !success;
++    if (!success) {
++      const int shift = std::min(retry_count_++, 5);
++      due_ms_ = now_ms + std::min<int64_t>(30000, int64_t{1000} << shift);
++      next_backend_ = 3;
++      return;
++    }
++    retry_count_ = 0;
++    degraded_ = backend == 3 && preferred_ != 3;
++    next_backend_ = preferred_;
++    due_ms_ = now_ms + 30000;
++  }
++  bool recovering() const { return pending_ || degraded_; }
++  uint32_t errors() const { return errors_; }
++
++ private:
++  int preferred_ = 0;
++  int next_backend_ = 3;
++  uint32_t errors_ = 0;
++  int retry_count_ = 0;
++  int64_t last_rebuild_ms_ = 0;
++  int64_t due_ms_ = 0;
++  bool pending_ = false;
++  bool degraded_ = false;
++};
++
++inline bool Fit(int width, int height, uint32_t max_width, uint32_t max_height,
++                int* output_width, int* output_height) {
++  if (width < 2 || height < 2 || width > 32768 || height > 32768 ||
++      int64_t{width} * height > 40000000) return false;
++  int64_t w = width, h = height;
++  if (max_width && w > max_width) {
++    h = std::max<int64_t>(2, h * max_width / w); w = max_width;
++  }
++  if (max_height && h > max_height) {
++    w = std::max<int64_t>(2, w * max_height / h); h = max_height;
++  }
++  *output_width = static_cast<int>(w) & ~1;
++  *output_height = static_cast<int>(h) & ~1;
++  return *output_width >= 2 && *output_height >= 2;
++}
++
++}  // namespace capture_policy
++}  // namespace libwebrtc
++#endif
+diff --git a/src/internal/bounded_i420_pool.h b/src/internal/bounded_i420_pool.h
+new file mode 100644
+--- /dev/null
++++ b/src/internal/bounded_i420_pool.h
+@@ -0,0 +1,33 @@
++#ifndef LIBWEBRTC_INTERNAL_BOUNDED_I420_POOL_H_
++#define LIBWEBRTC_INTERNAL_BOUNDED_I420_POOL_H_
++
++#include <array>
++#include "api/video/i420_buffer.h"
++#include "rtc_base/ref_counted_object.h"
++
++namespace libwebrtc {
++// Unlike VideoFrameBufferPool's dimension purge, these slots keep references
++// to retained old-resolution frames. Repeated resize cannot evade the bound.
++// Owned and used by exactly one capture/conversion thread.
++class BoundedI420Pool {
++ public:
++  webrtc::scoped_refptr<webrtc::I420Buffer> Get(int width, int height) {
++    Slot* available = nullptr;
++    for (auto& slot : slots_) {
++      if (!slot || slot->HasOneRef()) {
++        if (slot && slot->width() == width && slot->height() == height)
++          return slot;
++        if (!available) available = &slot;
++      }
++    }
++    if (!available) return nullptr;
++    *available = webrtc::scoped_refptr<webrtc::RefCountedObject<webrtc::I420Buffer>>(
++        new webrtc::RefCountedObject<webrtc::I420Buffer>(width, height));
++    return *available;
++  }
++ private:
++  using Slot = webrtc::scoped_refptr<webrtc::RefCountedObject<webrtc::I420Buffer>>;
++  std::array<Slot, 4> slots_;
++};
++}  // namespace libwebrtc
++#endif

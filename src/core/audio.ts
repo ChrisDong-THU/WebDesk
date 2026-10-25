@@ -2,7 +2,10 @@
 export class RemoteAudio {
   enabled = false;
   private closed = false;
-  constructor(private video: HTMLVideoElement, private request: (enabled: boolean) => Promise<unknown>) {}
+  constructor(
+    private video: HTMLVideoElement,
+    private request: (enabled: boolean) => Promise<unknown>,
+  ) {}
 
   async setEnabled(enabled: boolean) {
     if (this.closed) throw Error('连接已结束');
@@ -21,5 +24,9 @@ export class RemoteAudio {
     }
   }
 
-  close() { this.closed = true; this.enabled = false; this.video.muted = true; }
+  close() {
+    this.closed = true;
+    this.enabled = false;
+    this.video.muted = true;
+  }
 }

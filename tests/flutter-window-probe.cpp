@@ -1,24 +1,40 @@
 #include <windows.h>
+
 #include <iostream>
 #include <string>
 
 namespace {
 DWORD target_pid;
 HWND target;
+HWND picker;
 BOOL CALLBACK Find(HWND hwnd, LPARAM) {
   DWORD pid = 0;
   GetWindowThreadProcessId(hwnd, &pid);
   wchar_t klass[128]{};
   GetClassNameW(hwnd, klass, 128);
-  if (pid == target_pid && std::wstring(klass) == L"FLUTTER_RUNNER_WIN32_WINDOW") {
+  if (pid == target_pid &&
+      std::wstring(klass) == L"FLUTTER_RUNNER_WIN32_WINDOW") {
     target = hwnd;
     return FALSE;
   }
   return TRUE;
 }
+BOOL CALLBACK FindPicker(HWND hwnd, LPARAM) {
+  DWORD pid = 0;
+  GetWindowThreadProcessId(hwnd, &pid);
+  wchar_t klass[32]{};
+  GetClassNameW(hwnd, klass, 32);
+  if (pid == target_pid && GetAncestor(hwnd, GA_ROOTOWNER) == target &&
+      std::wstring(klass) == L"#32770" && IsWindowVisible(hwnd)) {
+    picker = hwnd;
+    return FALSE;
+  }
+  return TRUE;
 }
+}  // namespace
 
-// Test-only probe. Input itself must travel through the browser data channel.
+// Test-only probe scoped to the requested process. Remote input regressions
+// use the browser channel; picker lifecycle tests use close/cancel commands.
 int main(int argc, char** argv) {
   if (argc != 3) return 1;
   target_pid = static_cast<DWORD>(std::stoul(argv[1]));
@@ -26,6 +42,34 @@ int main(int argc, char** argv) {
   EnumWindows(Find, 0);
   if (!target) return 2;
   const std::string action = argv[2];
+  if (action == "inspect-picker" || action == "close-picker" ||
+      action == "cancel-picker") {
+    EnumWindows(FindPicker, 0);
+    if (!picker) return 7;
+    if (action != "inspect-picker") {
+      if (!PostMessageW(picker,
+                        action == "close-picker" ? WM_SYSCOMMAND : WM_COMMAND,
+                        action == "close-picker" ? SC_CLOSE : IDCANCEL, 0))
+        return 8;
+    }
+    std::cout << "{\"picker\":true,\"topmost\":"
+              << ((GetWindowLongPtrW(picker, GWL_EXSTYLE) & WS_EX_TOPMOST)
+                      ? "true"
+                      : "false")
+              << ",\"ownerTopmost\":"
+              << ((GetWindowLongPtrW(target, GWL_EXSTYLE) & WS_EX_TOPMOST)
+                      ? "true"
+                      : "false")
+              << ",\"ownerVisible\":"
+              << (IsWindowVisible(target) ? "true" : "false")
+              << ",\"ownerMinimized\":" << (IsIconic(target) ? "true" : "false")
+              << "}\n";
+    return 0;
+  }
+  if (action == "hide" || action == "minimize") {
+    ShowWindow(target, action == "hide" ? SW_HIDE : SW_SHOWMINNOACTIVE);
+    return 0;
+  }
   if (action == "lock") {
     if (!LockWorkStation()) return 6;
     std::cout << "{\"locking\":true}\n";
@@ -39,18 +83,21 @@ int main(int argc, char** argv) {
     return 3;
   }
   DWORD_PTR reply = 0;
-  if (!SendMessageTimeout(target, WM_NULL, 0, 0, SMTO_ABORTIFHUNG, 2000, &reply)) {
+  if (!SendMessageTimeout(target, WM_NULL, 0, 0, SMTO_ABORTIFHUNG, 2000,
+                          &reply)) {
     return 4;
   }
   TITLEBARINFOEX info{};
   info.cbSize = sizeof(info);
   if (!SendMessageTimeout(target, WM_GETTITLEBARINFOEX, 0,
-                          reinterpret_cast<LPARAM>(&info),
-                          SMTO_ABORTIFHUNG, 2000, &reply)) return 5;
+                          reinterpret_cast<LPARAM>(&info), SMTO_ABORTIFHUNG,
+                          2000, &reply))
+    return 5;
   POINT cursor{};
   GetCursorPos(&cursor);
   std::cout << "{\"cursorX\":" << cursor.x << ",\"cursorY\":" << cursor.y
-            << ",\"foreground\":" << (GetForegroundWindow() == target ? "true" : "false")
+            << ",\"foreground\":"
+            << (GetForegroundWindow() == target ? "true" : "false")
             << ",\"visible\":" << (IsWindowVisible(target) ? "true" : "false")
             << ",\"minimized\":" << (IsIconic(target) ? "true" : "false")
             << ",\"maximized\":" << (IsZoomed(target) ? "true" : "false")

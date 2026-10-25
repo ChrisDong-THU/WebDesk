@@ -1,6 +1,6 @@
 # 开发指南
 
-适用版本：0.5.9。本文说明代码结构、本地开发、测试和构建；服务器部署见[自部署指南](self-hosting.md)。
+适用版本：0.6.0。本文说明代码结构、本地开发、测试和构建；服务器部署见[自部署指南](self-hosting.md)。
 
 ## 架构与来源
 
@@ -38,17 +38,17 @@ flowchart LR
 
 ### 连接恢复与媒体策略
 
-浏览器串行处理信令，在远端 SDP 就绪前缓存最多 256 个 ICE 候选，协商失败交由会话层清理。短暂的媒体 `disconnected` 状态允许最多 15 秒自行恢复；`failed` 状态立即结束。恢复期间暂停浏览器键鼠输入，被控端释放已按下的键鼠。信令服务器断开仍结束当前会话；目前没有跨网络切换的 ICE restart 或会话续接。
+0.6.0 只接受当前会话协议。网页、客户端、服务端在认证时交换 `protocolVersion`；画质设置必须带齐当前字段。协商 Offer/Answer 必须有递增编号，过期回复与旧 ICE 世代不会改变当前连接。修改协议版本时，`shared/protocol.mjs` 与 Dart `protocol/version.dart` 必须同步，发布检查会校验二者。
 
-原生端将 Answer 后的发送参数更新、实时画质调整和桌面切换放入同一串行队列。普通桌面采集不合成系统光标；安全桌面同样不绘制光标。桌面源明确标记为 screencast，关闭摄像头降噪。默认 `detail` 和 `text` 对应保分辨率的降级策略，`motion` 对应保帧率；当前映射不等于开启编码器专用的文本或无损模式。
+短暂媒体断开由主机在同一 peer 上最多两次 ICE restart，保留音视频与工具通道。信令丢失时，网页在 60 秒内按 2/4/8/10 秒间隔重新认证并建立新会话；手动断开、认证失败和页面关闭取消恢复。恢复期间暂停输入并释放已按下键鼠。文件传输及音频开启状态不跨新会话续接。
 
-普通桌面 BGRA → I420 转换使用实际 stride 和最多 4 个可复用缓冲区；只有编码器已经释放的帧才可重新写入。满载时丢弃新采集帧，避免改写编码中的帧。尺寸按宽、高分别匹配。采集周期扣除本次采集和转换耗时，避免每帧工作时间叠加到帧间隔。普通桌面上限 60 FPS，安全桌面上限 30 FPS；兼容接收旧客户端的 120 FPS 请求，但发送参数也按实际采集上限约束。
+普通桌面可使用 DXGI/WGC/GDI，帧池最多四个，有源新鲜度、采集/转换耗时和恢复统计。CPU 路径先按采集预算缩放、再转换；GPU 路径采用独立纹理池，支持时以 NV12 交给硬编。跨显卡 CPU 桥或软件读回的实际开销持续过高时，在同轨道内尝试 CPU 早缩放。不能把 GPU 路径名称当作端到端零拷贝的证明。
 
-“自动码率”使用输出像素数 × 有效帧率 × 0.1 计算视频码率上限，限制在 2–32 Mbps；安全桌面按最多 30 FPS 计算。此策略避免未设置上限时单路 VP8 在高分辨率下仍使用 libwebrtc 约 2.5 Mbps 的默认上限。例如，1080p60 的自动上限约 12.44 Mbps，4K60 为 32 Mbps。它是上限策略，不是目标码率、最低保证或性能测量结果：实际速率仍由拥塞控制决定，手动选择的 1–16 Mbps 上限保持原值。
+H.264 优先可用的 NVENC，再到 Media Foundation 和同 codec 软件实现；初始化与动态码率控制失败可回退。AV1 当前为 libaom，VP8/VP9 为 libvpx，不能仅凭 codec 名推断硬编。自动编码按清晰/延迟目标、实际能力和持续编码/接收端解码压力选择，保留有界试探、预热和冷却。手动选项是首选，双方没有共同能力时仍协商后备。网页通过标准 `setCodecPreferences` 保留全部 profile/repair 能力，不改写 SDP。运行逻辑分别在 `codec_selection.dart`、`adaptive_video.dart` 和 `native_texture_policy.dart`，浏览器诊断格式集中在 `media-diagnostics.ts`。
 
-建立 Offer 前通过原生 `setCodecPreferences` 优先选择 AV1 → VP9 → VP8 → H.264，保留全部已报告的 profiles、RTX/RED/FEC 及其他候选。最终仍取双方支持的格式；偏好 API 不可用时使用平台默认顺序。依据是本仓库虚拟双端测量，不代表所有 CPU 上都具有同样收益，也不代表硬件编码。当前 Windows 构建的 VP8/VP9 使用 libvpx、AV1 使用 libaom、H.264 使用 OpenH264。浏览器统计分别显示 RTT、编码耗时、解码耗时和接收缓冲等待，不能把 RTT 当作操作响应延迟。
+普通桌面最高 60 FPS，安全桌面最高 30 FPS。自动码率使用输出像素 × 有效 FPS × 0.1 的 2–32 Mbps 上限，手动 1–16 Mbps 上限保持原值；实际发送仍受 WebRTC 拥塞控制。降级策略决定空间与时间分辨率的取舍，网络模式决定应用层压力阈值。RTT、编码耗时、解码耗时与缓冲等待分开显示，RTT 不等于输入到画面的响应时间。
 
-上游代码来源见 [billd-desk 清单](../third_party/billd-desk/manifest.json)、[billd-desk-server 清单](../third_party/billd-desk-server/manifest.json)和[原生依赖清单](../native/flutter/dependencies.json)。托盘插件保存在 `third_party/tray_manager/`，来源与修改范围记录于其 `upstream.json`。`electron-main/` 仅用于兼容测试，不属于发行客户端。许可证见[第三方声明](../THIRD_PARTY_NOTICES.md)，权限边界见[安全策略](../SECURITY.md)。
+上游源码与固定补丁仍保留来源校验；正常采集/编码故障回退属于当前功能。历史取证与本机测量见 [媒体分析](webdesk-auto-codecs-20261025.md)，其中候选包、旧协议和部署状态是当时记录，当前版本以本指南和发行记录为准。`electron-main/` 只用于开发测试，不属于发行客户端。
 
 ### 键鼠输入
 
@@ -111,6 +111,7 @@ npm run dev:host
 ### 自动检查
 
 ```sh
+npm run format:check
 npm test
 npm run release:check
 ```
@@ -182,10 +183,10 @@ node scripts/summarize-media.cjs test-results/media-benchmark/candidate.json
 npm run build:inno
 ```
 
-构建会运行版本校验、原生回归、Flutter 分析和测试，使用生产入口 `lib/main.dart` 编译，并校验依赖、管理员清单和音频库。输出位于 `flutter-release/0.5.9/`：
+构建会运行版本校验、原生回归、Flutter 分析和测试，使用生产入口 `lib/main.dart` 编译，并校验依赖、管理员清单和音频库。输出位于 `flutter-release/0.6.0/`：
 
-- `WebDesk-0.5.9-win-x64.exe`：安装包。
-- `WebDesk-0.5.9-win-x64.exe.sha256`：校验文件。
+- `WebDesk-0.6.0-win-x64.exe`：安装包。
+- `WebDesk-0.6.0-win-x64.exe.sha256`：校验文件。
 - `build.json`：构建信息及对应 payload 目录。
 
 构建命令不安装应用。`npm run build:flutter` 仅生成程序目录；`npm run preview:installer` 预览安装界面。代码签名需由发行者配置。

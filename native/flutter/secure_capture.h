@@ -1,6 +1,9 @@
 #pragma once
 #include <windows.h>
 #include <atomic>
+#include <algorithm>
+#include <chrono>
+#include <cstring>
 #include <thread>
 #include <vector>
 #include <stdexcept>
@@ -13,7 +16,7 @@
 class WebDeskSecureCapture {
  public:
   WebDeskSecureCapture(libwebrtc::scoped_refptr<libwebrtc::RTCVideoSource> source,
-                       int height, int fps) : source_(source), height_(height), fps_(fps) {
+                       int height, int fps) : source_(source), height_(std::clamp(height, 2, 32768)), fps_(std::clamp(fps, 1, 60)) {
     SECURITY_ATTRIBUTES sa{sizeof(sa), nullptr, TRUE};
     HANDLE child_in=nullptr, child_out=nullptr;
     if (!CreatePipe(&child_in, &write_, &sa, 0)) throw std::runtime_error("Capture input pipe failed");
@@ -47,7 +50,6 @@ class WebDeskSecureCapture {
     while(count && !stopped_) {DWORD read=0;if(!ReadFile(read_,p,static_cast<DWORD>(count),&read,nullptr)||!read)return false;p+=read;count-=read;}
     return !count;
   }
-  static uint8_t Clamp(int value){return static_cast<uint8_t>(value<0?0:value>255?255:value);}
   void Run() {
     while(!stopped_) {
       const auto started=std::chrono::steady_clock::now();
@@ -62,24 +64,16 @@ class WebDeskSecureCapture {
       if(bgra_.size()<8)break;
       int w,h;memcpy(&w,bgra_.data(),4);memcpy(&h,bgra_.data()+4,4);
       if(w<2||h<2||(w&1)||(h&1)||static_cast<int64_t>(w)*h>40000000||bgra_.size()!=8+static_cast<size_t>(w)*h*4)break;
-      const size_t plane=static_cast<size_t>(w)*h;
-      i420_.resize(plane*3/2);auto y=i420_.data(),u=y+plane,v=u+plane/4;
-      const auto pixels=bgra_.data()+8;
-      for(int row=0;row<h;row+=2) for(int col=0;col<w;col+=2) {
-        int red=0,green=0,blue=0;
-        for(int dy=0;dy<2;dy++) for(int dx=0;dx<2;dx++) {
-          const auto pos=static_cast<size_t>(row+dy)*w+col+dx;const auto p=pixels+pos*4;
-          const int b=p[0],g=p[1],r=p[2];red+=r;green+=g;blue+=b;
-          y[pos]=Clamp(((66*r+129*g+25*b+128)>>8)+16);
-        }
-        red/=4;green/=4;blue/=4;const auto uv=static_cast<size_t>(row/2)*(w/2)+col/2;
-        u[uv]=Clamp(((-38*red-74*green+112*blue+128)>>8)+128);
-        v[uv]=Clamp(((112*red-94*green-18*blue+128)>>8)+128);
+      // libwebrtc owns a four-slot conversion pool and uses its already-linked
+      // libyuv SIMD implementation (BGRA -> BT.601 limited I420). The native
+      // bridge wire format is unchanged; caller bytes are never retained.
+      auto frame=libwebrtc::RTCVideoFrame::CreateFromBgra(
+          w,h,bgra_.data()+8,w*4,static_cast<int>(bgra_.size()-8));
+      if(frame.get()) {
+        last_frame_=GetTickCount64();
+        healthy_=true;
+        source_->OnCapturedFrame(frame);
       }
-      last_frame_=GetTickCount64();
-      healthy_=true;
-      // Publish health before consumers observe the frame callback.
-      source_->OnCapturedFrame(libwebrtc::RTCVideoFrame::Create(w,h,i420_.data(),static_cast<int>(i420_.size())));
       const auto next=started+std::chrono::milliseconds(1000/fps_);
       std::this_thread::sleep_until(next);
     }
@@ -91,5 +85,5 @@ class WebDeskSecureCapture {
   std::thread thread_;
   std::atomic<bool> stopped_{false},healthy_{false};
   std::atomic<ULONGLONG> last_frame_{0};
-  std::vector<uint8_t> bgra_,i420_;
+  std::vector<uint8_t> bgra_;
 };
