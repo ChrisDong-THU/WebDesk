@@ -1,6 +1,6 @@
 # 开发指南
 
-适用版本：0.6.0。本文说明代码结构、本地开发、测试和构建；服务器部署见[自部署指南](self-hosting.md)。
+适用版本：0.6.2。本文说明代码结构、本地开发、测试和构建；服务器部署见[自部署指南](self-hosting.md)。
 
 ## 架构与来源
 
@@ -38,7 +38,7 @@ flowchart LR
 
 ### 连接恢复与媒体策略
 
-0.6.0 只接受当前会话协议。网页、客户端、服务端在认证时交换 `protocolVersion`；画质设置必须带齐当前字段。协商 Offer/Answer 必须有递增编号，过期回复与旧 ICE 世代不会改变当前连接。修改协议版本时，`shared/protocol.mjs` 与 Dart `protocol/version.dart` 必须同步，发布检查会校验二者。
+当前版本只接受会话协议 1。网页、客户端、服务端在认证时交换 `protocolVersion`；画质设置必须带齐当前字段。协商 Offer/Answer 必须有递增编号，过期回复与旧 ICE 世代不会改变当前连接。修改协议版本时，`shared/protocol.mjs` 与 Dart `protocol/version.dart` 必须同步，发布检查会校验二者。
 
 短暂媒体断开由主机在同一 peer 上最多两次 ICE restart，保留音视频与工具通道。信令丢失时，网页在 60 秒内按 2/4/8/10 秒间隔重新认证并建立新会话；手动断开、认证失败和页面关闭取消恢复。恢复期间暂停输入并释放已按下键鼠。文件传输及音频开启状态不跨新会话续接。
 
@@ -49,6 +49,12 @@ H.264 优先可用的 NVENC，再到 Media Foundation 和同 codec 软件实现�
 普通桌面最高 60 FPS，安全桌面最高 30 FPS。自动码率使用输出像素 × 有效 FPS × 0.1 的 2–32 Mbps 上限，手动 1–16 Mbps 上限保持原值；实际发送仍受 WebRTC 拥塞控制。降级策略决定空间与时间分辨率的取舍，网络模式决定应用层压力阈值。RTT、编码耗时、解码耗时与缓冲等待分开显示，RTT 不等于输入到画面的响应时间。
 
 上游源码与固定补丁仍保留来源校验；正常采集/编码故障回退属于当前功能。历史取证与本机测量见 [媒体分析](webdesk-auto-codecs-20261025.md)，其中候选包、旧协议和部署状态是当时记录，当前版本以本指南和发行记录为准。`electron-main/` 只用于开发测试，不属于发行客户端。
+
+### 客户端待机资源
+
+Windows 界面继续使用 Flutter，固定使用 Skia 渲染。WebRTC 插件先注册方法与事件通道，首次媒体调用才创建媒体对象并加载 `libwebrtc.dll`；仅启动界面或等待连接不会启动媒体引擎。连接先释放通道和观察者，再关闭并删除工厂持有的 peer 引用。已初始化的共享工厂保留供后续会话复用，不强制卸载仍可能有回调的 DLL。
+
+同机 860×620 界面与本机信令注册的测量中，主进程工作集从约 461/441 MiB（未开启/等待连接）降到约 139/144 MiB；数值不包括独立桌面服务，也不代表所有设备的固定内存要求。
 
 ### 键鼠输入
 
@@ -183,10 +189,10 @@ node scripts/summarize-media.cjs test-results/media-benchmark/candidate.json
 npm run build:inno
 ```
 
-构建会运行版本校验、原生回归、Flutter 分析和测试，使用生产入口 `lib/main.dart` 编译，并校验依赖、管理员清单和音频库。输出位于 `flutter-release/0.6.0/`：
+构建会运行版本校验、原生回归、Flutter 分析和测试，使用生产入口 `lib/main.dart` 编译，并校验依赖、管理员清单和音频库。输出位于 `flutter-release/0.6.2/`：
 
-- `WebDesk-0.6.0-win-x64.exe`：安装包。
-- `WebDesk-0.6.0-win-x64.exe.sha256`：校验文件。
+- `WebDesk-0.6.2-win-x64.exe`：安装包。
+- `WebDesk-0.6.2-win-x64.exe.sha256`：校验文件。
 - `build.json`：构建信息及对应 payload 目录。
 
 构建命令不安装应用。`npm run build:flutter` 仅生成程序目录；`npm run preview:installer` 预览安装界面。代码签名需由发行者配置。

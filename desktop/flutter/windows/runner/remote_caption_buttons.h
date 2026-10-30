@@ -1,9 +1,9 @@
 #ifndef WEBDESK_REMOTE_CAPTION_BUTTONS_H_
 #define WEBDESK_REMOTE_CAPTION_BUTTONS_H_
 
+#include <dwmapi.h>
 #include <windows.h>
 #include <windowsx.h>
-#include <dwmapi.h>
 
 #include <optional>
 
@@ -48,22 +48,23 @@ class RemoteCaptionButtons {
         SendMessage(hwnd, WM_GETTITLEBARINFOEX, 0,
                     reinterpret_cast<LPARAM>(&titlebar));
         LRESULT hit = HTNOWHERE;
-        const int index = pressed == HTMINBUTTON ? 2 : pressed == HTMAXBUTTON ? 3 : 5;
+        const int index = pressed == HTMINBUTTON   ? 2
+                          : pressed == HTMAXBUTTON ? 3
+                                                   : 5;
         if (PtInRect(&titlebar.rgrect[index], point) &&
-            !(titlebar.rgstate[index] & (STATE_SYSTEM_INVISIBLE | STATE_SYSTEM_UNAVAILABLE))) {
+            !(titlebar.rgstate[index] &
+              (STATE_SYSTEM_INVISIBLE | STATE_SYSTEM_UNAVAILABLE))) {
           hit = pressed;
-        } else if (!DwmDefWindowProc(hwnd, WM_NCHITTEST, 0, screen_point, &hit)) {
+        } else if (!DwmDefWindowProc(hwnd, WM_NCHITTEST, 0, screen_point,
+                                     &hit)) {
           hit = SendMessage(hwnd, WM_NCHITTEST, 0, screen_point);
         }
         if (hit == pressed) {
           const WPARAM command = pressed == HTMINBUTTON ? SC_MINIMIZE
-              : pressed == HTCLOSE ? SC_CLOSE
-              : IsZoomed(hwnd) ? SC_RESTORE : SC_MAXIMIZE;
-          const HMENU menu = GetSystemMenu(hwnd, FALSE);
-          const UINT state = menu ? GetMenuState(menu, static_cast<UINT>(command),
-                                                MF_BYCOMMAND) : 0;
-          if (state != static_cast<UINT>(-1) &&
-              !(state & (MF_DISABLED | MF_GRAYED))) {
+                                 : pressed == HTCLOSE   ? SC_CLOSE
+                                 : IsZoomed(hwnd)       ? SC_RESTORE
+                                                        : SC_MAXIMIZE;
+          if (CanExecute(hwnd, pressed)) {
             // Keep WM_CLOSE/window_manager's hide-to-tray handling intact.
             PostMessage(hwnd, WM_SYSCOMMAND, command, screen_point);
           }
@@ -87,6 +88,23 @@ class RemoteCaptionButtons {
  private:
   static bool IsButton(WPARAM hit) {
     return hit == HTMINBUTTON || hit == HTMAXBUTTON || hit == HTCLOSE;
+  }
+
+  static bool CanExecute(HWND hwnd, int button) {
+    if (!IsWindowEnabled(hwnd)) return false;
+    // Windows refreshes size-command menu flags when it initializes the
+    // system menu. Those cached flags can still describe the previous size
+    // after an asynchronous maximize/restore. Caption availability comes from
+    // the window styles; the current IsZoomed state selects the command.
+    const auto style = GetWindowLongPtr(hwnd, GWL_STYLE);
+    if (button == HTMINBUTTON) return (style & WS_MINIMIZEBOX) != 0;
+    if (button == HTMAXBUTTON) return (style & WS_MAXIMIZEBOX) != 0;
+    // Closing can be explicitly disabled through the system menu. Keep that
+    // application policy, and continue routing through WM_CLOSE for the tray.
+    const HMENU menu = GetSystemMenu(hwnd, FALSE);
+    const UINT state = menu ? GetMenuState(menu, SC_CLOSE, MF_BYCOMMAND) : 0;
+    return state != static_cast<UINT>(-1) &&
+           !(state & (MF_DISABLED | MF_GRAYED));
   }
 
   void Cancel(HWND hwnd) {

@@ -1,0 +1,139 @@
+diff --git a/windows/CMakeLists.txt b/windows/CMakeLists.txt
+--- a/windows/CMakeLists.txt
++++ b/windows/CMakeLists.txt
+@@ -52,6 +52,9 @@
+ )
+ 
+ apply_standard_settings(${PLUGIN_NAME})
++# Load the media engine only when a WebRTC operation actually needs it.
++target_link_options(${PLUGIN_NAME} PRIVATE "/DELAYLOAD:libwebrtc.dll")
++target_link_libraries(${PLUGIN_NAME} PRIVATE delayimp.lib)
+ target_compile_options(${PLUGIN_NAME} PRIVATE /utf-8)
+ set_target_properties(${PLUGIN_NAME} PROPERTIES
+   CXX_VISIBILITY_PRESET hidden)
+diff --git a/windows/flutter_webrtc_plugin.cc b/windows/flutter_webrtc_plugin.cc
+--- a/windows/flutter_webrtc_plugin.cc
++++ b/windows/flutter_webrtc_plugin.cc
+@@ -38,6 +38,7 @@
+     // Members are destroyed in reverse order, which would free task_runner_
+     // before webrtc_. FlutterWebRTC posts events through the task runner
+     // while it is torn down, so destroy it first.
++    if (g_shared_instance == webrtc_.get()) g_shared_instance = nullptr;
+     webrtc_.reset();
+   }
+ 
+@@ -54,15 +55,18 @@
+       : channel_(std::move(channel)),
+         messenger_(registrar->messenger()),
+         textures_(registrar->texture_registrar()),
+-        task_runner_(std::make_unique<TaskRunnerWindows>()) {
+-    webrtc_ = std::make_unique<FlutterWebRTC>(this);
+-    g_shared_instance = webrtc_.get();
+-  }
++        task_runner_(std::make_unique<TaskRunnerWindows>()),
++        event_channel_(EventChannelProxy::Create(
++            messenger_, task_runner_.get(), "FlutterWebRTC.Event")) {}
+ 
+   // Called when a method is called on |channel_|;
+   void HandleMethodCall(const MethodCall& method_call,
+                         std::unique_ptr<MethodResult> result) {
+     // handle method call and forward to webrtc native sdk.
++    if (!webrtc_) {
++      webrtc_ = std::make_unique<FlutterWebRTC>(this, std::move(event_channel_));
++      g_shared_instance = webrtc_.get();
++    }
+     auto method_call_proxy = MethodCallProxy::Create(method_call);
+     webrtc_->HandleMethodCall(*method_call_proxy.get(),
+                               MethodResultProxy::Create(std::move(result)));
+@@ -74,6 +78,8 @@
+   BinaryMessenger* messenger_;
+   TextureRegistrar* textures_;
+   std::unique_ptr<TaskRunner> task_runner_;
++  // Events can be subscribed before the first media call without loading WebRTC.
++  std::unique_ptr<EventChannelProxy> event_channel_;
+ };
+ 
+ }  // namespace flutter_webrtc_plugin
+diff --git a/common/cpp/src/flutter_webrtc_base.cc b/common/cpp/src/flutter_webrtc_base.cc
+--- a/common/cpp/src/flutter_webrtc_base.cc
++++ b/common/cpp/src/flutter_webrtc_base.cc
+@@ -36,9 +36,11 @@
+ 
+ FlutterWebRTCBase::FlutterWebRTCBase(BinaryMessenger* messenger,
+                                      TextureRegistrar* textures,
+-                                     TaskRunner *task_runner)
++                                     TaskRunner *task_runner,
++                                     std::unique_ptr<EventChannelProxy> events)
+     : messenger_(messenger), task_runner_(task_runner), textures_(textures) {
+-  event_channel_ = EventChannelProxy::Create(messenger_, task_runner_, kEventChannelName);
++  event_channel_ = events ? std::move(events)
++                          : EventChannelProxy::Create(messenger_, task_runner_, kEventChannelName);
+ }
+ 
+ FlutterWebRTCBase::~FlutterWebRTCBase() {
+@@ -253,8 +255,8 @@
+     } else if (TypeIs<int>(v)) {
+       value = std::to_string(GetValue<int>(v));
+     } else if (TypeIs<bool>(v)) {
+-      value = GetValue<bool>(v) ? RTCMediaConstraints::kValueTrue
+-                                : RTCMediaConstraints::kValueFalse;
++      // Literal values avoid data imports, which cannot be delay-loaded.
++      value = GetValue<bool>(v) ? "true" : "false";
+     } else {
+       continue;
+     }
+diff --git a/common/cpp/src/flutter_peerconnection.cc b/common/cpp/src/flutter_peerconnection.cc
+--- a/common/cpp/src/flutter_peerconnection.cc
++++ b/common/cpp/src/flutter_peerconnection.cc
+@@ -398,6 +398,8 @@
+   auto it2 = base_->peerconnections_.find(uuid);
+   if (it2 != base_->peerconnections_.end()) {
+     it2->second->Close();
++    // The factory also owns a reference until Delete, even after Close.
++    base_->factory_->Delete(it2->second);
+     base_->peerconnections_.erase(it2);
+   }
+ 
+diff --git a/common/cpp/include/flutter_webrtc.h b/common/cpp/include/flutter_webrtc.h
+--- a/common/cpp/include/flutter_webrtc.h
++++ b/common/cpp/include/flutter_webrtc.h
+@@ -40,7 +40,8 @@
+                       public FlutterFrameCryptor,
+                       public FlutterDataPacketCryptor {
+  public:
+-  FlutterWebRTC(FlutterWebRTCPlugin* plugin);
++  FlutterWebRTC(FlutterWebRTCPlugin* plugin,
++                std::unique_ptr<EventChannelProxy> events = nullptr);
+   virtual ~FlutterWebRTC();
+ 
+   void HandleMethodCall(const MethodCallProxy& method_call,
+diff --git a/common/cpp/include/flutter_webrtc_base.h b/common/cpp/include/flutter_webrtc_base.h
+--- a/common/cpp/include/flutter_webrtc_base.h
++++ b/common/cpp/include/flutter_webrtc_base.h
+@@ -49,7 +49,8 @@
+  public:
+   FlutterWebRTCBase(BinaryMessenger* messenger,
+                     TextureRegistrar* textures,
+-                    TaskRunner* task_runner);
++                    TaskRunner* task_runner,
++                    std::unique_ptr<EventChannelProxy> events = nullptr);
+   ~FlutterWebRTCBase();
+ 
+   // Initializes WebRTC and creates the peer connection factory the first time
+diff --git a/common/cpp/src/flutter_webrtc.cc b/common/cpp/src/flutter_webrtc.cc
+--- a/common/cpp/src/flutter_webrtc.cc
++++ b/common/cpp/src/flutter_webrtc.cc
+@@ -7,10 +7,11 @@
+ 
+ static EventChannelProxy* eventChannelProxy = nullptr;
+ 
+-FlutterWebRTC::FlutterWebRTC(FlutterWebRTCPlugin* plugin)
++FlutterWebRTC::FlutterWebRTC(FlutterWebRTCPlugin* plugin,
++                           std::unique_ptr<EventChannelProxy> events)
+     : FlutterWebRTCBase::FlutterWebRTCBase(plugin->messenger(),
+                                            plugin->textures(),
+-                                           plugin->task_runner()),
++                                           plugin->task_runner(), std::move(events)),
+       FlutterVideoRendererManager::FlutterVideoRendererManager(this),
+       FlutterMediaStream::FlutterMediaStream(this),
+       FlutterPeerConnection::FlutterPeerConnection(this),

@@ -46,33 +46,46 @@ int main() {
   klass.lpfnWndProc = WindowProc;
   if (!RegisterClassW(&klass)) return 1;
   // Hidden, owned window; no SendInput, desktop switching or user interaction.
-  HWND hwnd = CreateWindowW(klass.lpszClassName, L"", WS_OVERLAPPEDWINDOW,
-                            0, 0, 640, 480, nullptr, nullptr, klass.hInstance, nullptr);
+  HWND hwnd =
+      CreateWindowW(klass.lpszClassName, L"", WS_OVERLAPPEDWINDOW, 0, 0, 640,
+                    480, nullptr, nullptr, klass.hInstance, nullptr);
   if (!hwnd) return 2;
   const int hits[] = {HTMINBUTTON, HTMAXBUTTON, HTCLOSE};
   const WPARAM expected[] = {SC_MINIMIZE, SC_MAXIMIZE, SC_CLOSE};
-  for (LPARAM tag : {static_cast<LPARAM>(0),
-                     static_cast<LPARAM>(kWebDeskRemoteMouseTag)}) {
-   for (int i = 0; i < 3; ++i) {
-    commands.clear();
-    release_hit = hits[i];
-    if (!Press(hwnd, hits[i], tag) || !commands.empty()) return 3;
-    // Button-up is delivered on a later turn, like a second RTC message.
-    PostMessage(hwnd, WM_LBUTTONUP, 0, 0);
-    Drain();
-    if (commands != std::vector<WPARAM>{expected[i]} || GetCapture() == hwnd) return 4;
-   }
+  for (LPARAM tag :
+       {static_cast<LPARAM>(0), static_cast<LPARAM>(kWebDeskRemoteMouseTag)}) {
+    for (int i = 0; i < 3; ++i) {
+      commands.clear();
+      release_hit = hits[i];
+      if (!Press(hwnd, hits[i], tag) || !commands.empty()) return 3;
+      // Button-up is delivered on a later turn, like a second RTC message.
+      PostMessage(hwnd, WM_LBUTTONUP, 0, 0);
+      Drain();
+      if (commands != std::vector<WPARAM>{expected[i]} || GetCapture() == hwnd)
+        return 4;
+    }
   }
 
   commands.clear();
   const auto style = GetWindowLongPtr(hwnd, GWL_STYLE);
   SetWindowLongPtr(hwnd, GWL_STYLE, style | WS_MAXIMIZE);
+  // Cached size-menu flags must not veto a valid caption toggle.
+  EnableMenuItem(GetSystemMenu(hwnd, FALSE), SC_RESTORE,
+                 MF_BYCOMMAND | MF_GRAYED);
   release_hit = HTMAXBUTTON;
   if (!Press(hwnd, HTMAXBUTTON)) return 5;
   SendMessage(hwnd, WM_NCLBUTTONUP, HTMAXBUTTON, 0);
   Drain();
   if (commands != std::vector<WPARAM>{SC_RESTORE}) return 6;
   SetWindowLongPtr(hwnd, GWL_STYLE, style);
+
+  commands.clear();
+  EnableMenuItem(GetSystemMenu(hwnd, FALSE), SC_MAXIMIZE,
+                 MF_BYCOMMAND | MF_GRAYED);
+  if (!Press(hwnd, HTMAXBUTTON)) return 15;
+  SendMessage(hwnd, WM_NCLBUTTONUP, HTMAXBUTTON, 0);
+  Drain();
+  if (commands != std::vector<WPARAM>{SC_MAXIMIZE}) return 16;
 
   commands.clear();
   if (!Press(hwnd, HTCLOSE)) return 7;
@@ -83,15 +96,18 @@ int main() {
 
   for (UINT cancel : {WM_CANCELMODE, WM_CAPTURECHANGED, WM_ACTIVATE}) {
     if (!Press(hwnd, HTCLOSE)) return 9;
-    if (cancel == WM_CAPTURECHANGED) ReleaseCapture();
-    else SendMessage(hwnd, cancel, WA_INACTIVE, 0);
+    if (cancel == WM_CAPTURECHANGED)
+      ReleaseCapture();
+    else
+      SendMessage(hwnd, cancel, WA_INACTIVE, 0);
     release_hit = HTCLOSE;
     SendMessage(hwnd, WM_LBUTTONUP, 0, 0);
     Drain();
     if (!commands.empty() || GetCapture() == hwnd) return 10;
   }
 
-  EnableMenuItem(GetSystemMenu(hwnd, FALSE), SC_CLOSE, MF_BYCOMMAND | MF_GRAYED);
+  EnableMenuItem(GetSystemMenu(hwnd, FALSE), SC_CLOSE,
+                 MF_BYCOMMAND | MF_GRAYED);
   if (!Press(hwnd, HTCLOSE)) return 11;
   SendMessage(hwnd, WM_LBUTTONUP, 0, 0);
   Drain();

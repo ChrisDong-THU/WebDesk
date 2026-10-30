@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { io } from 'socket.io-client';
 import { createSignalingServer } from '../server/index.mjs';
 import { DEFAULT_QUALITY } from '../shared/protocol.mjs';
@@ -78,7 +79,8 @@ test('registration and connections require the coordinated session protocol', as
     assert.equal(connection.code, 'PROTOCOL_MISMATCH');
   }
   const health = await (await fetch(`${url}/health`)).json();
-  assert.equal(health.version, '0.6.1');
+  const { version } = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.equal(health.version, version);
   assert.equal(health.protocolVersion, 1);
   const current = await client();
   const result = await current

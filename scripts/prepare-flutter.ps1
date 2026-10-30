@@ -32,7 +32,7 @@ if ($LASTEXITCODE -ne 0 -or $tagCommit -ne $manifest.flutter.commit) {
 Ensure-Checkout $manifest.flutterWebrtc $plugin
 # Keep fixes separate so existing checkouts with the base patch can upgrade.
 . (Join-Path $PSScriptRoot 'apply-patch-stack.ps1')
-$pluginPatches = @('flutter-webrtc.patch', 'flutter-webrtc-task-runner.patch', 'flutter-webrtc-capture-lifetime.patch', 'flutter-webrtc-external-audio.patch', 'flutter-webrtc-media-policy.patch') | ForEach-Object { Join-Path $root "native\flutter\$_" }
+$pluginPatches = @('flutter-webrtc.patch', 'flutter-webrtc-task-runner.patch', 'flutter-webrtc-capture-lifetime.patch', 'flutter-webrtc-external-audio.patch', 'flutter-webrtc-media-policy.patch', 'flutter-webrtc-idle-memory.patch') | ForEach-Object { Join-Path $root "native\flutter\$_" }
 ApplyPatchStack $plugin $pluginPatches
 # Pin and verify the binary before upstream CMake sees its download cache.
 $archive = Join-Path $plugin 'third_party\downloads\libwebrtc-win-x64-release.zip'
